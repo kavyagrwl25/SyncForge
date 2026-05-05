@@ -15,18 +15,33 @@ function App() {
       return;
     }
 
+    const roomData = { username, roomId };      // Create an object to store the username and room ID in localStorage
+    localStorage.setItem("roomData", JSON.stringify(roomData));     // Store the room data in localStorage as a JSON string for later retrieval
+
     socket.connect();
     socket.emit("join-room", { username, roomId });
     console.log("Joined room:", { username, roomId });
   };
 
   useEffect(() => {
-    socket.on("user-joined", (data) => {
+    const savedRoomData = localStorage.getItem("roomData");
+    if (savedRoomData) {
+      const { username, roomId } = JSON.parse(savedRoomData);
+      setUsername(username);
+      setRoomId(roomId);
+      if (!socket.connected) {
+        socket.connect();
+      }
+      socket.emit("join-room", { username, roomId });
+      console.log("Auto rejoined room:", { username, roomId });
+    }
+    const handleUserJoined = (data) => {
       console.log("User joined:", data);
-    });
+    };
+    socket.on("user-joined", handleUserJoined);
 
     return () => {
-      socket.off("user-joined");
+      socket.off("user-joined", handleUserJoined);
     };
   }, []);
 
