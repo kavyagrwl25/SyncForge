@@ -1,21 +1,54 @@
-# Concepts Learned
+# 📘 Concepts Learned (Socket.io + Express)
 
-## Socket.IO Basics
-- socket.emit → send event
-- socket.on → receive event
-- socket.join → add socket to room
-- socket.to(room).emit → broadcast except sender
+### 1. Socket.io Setup
 
-## Rooms
-- Automatically created
-- Stored in server memory 
-- Used for grouping users
+* Install `socket.io` (server) and `socket.io-client` (client)
+* Create an HTTP server and attach Socket.io to it
+* Listen for `connection` events on the server
 
-## Server Memory
-- (Server memory is temporary RAM storage used by the backend during runtime—for example, in TeamForge req.user exists only during a request in memory, while actual user data is stored permanently in MongoDB.)
-- Temporary storage (RAM)
-- Lost on server restart
+---
 
-## useEffect
-- Runs after component render
-- Used for side effects like sockets
+### 2. Emitting & Listening Events
+
+* `socket.emit()` → send events
+* `socket.on()` → receive events
+* Works on both client and server
+
+---
+
+### 3. Rooms in Socket.io
+
+* `socket.join(room)` → join a room
+* `socket.leave(room)` → leave a room
+* `socket.to(room).emit()` → broadcast to room (except sender)
+
+---
+
+### 4. Handling Disconnections
+
+* Listen for `disconnect` event
+* Remove user / clean resources
+* Notify other users if needed
+
+---
+
+### 5. Express + Socket.io Integration
+
+* Create Express app
+* Create HTTP server using Express
+* Attach Socket.io to same server
+* Single server handles:
+
+  * HTTP APIs (Express)
+  * Real-time events (Socket.io)
+
+---
+
+### 6. Key Insight
+
+* Express is a **request handler**, not a server
+* HTTP server is the **actual server** that listens for requests
+* Socket.io extends the same server for real-time communication
+
+----------------------------------
+
