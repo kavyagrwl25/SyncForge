@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { socket } from "./socket";
+import { useEffect } from 'react';
 import './App.css'
 
 function App() {
@@ -15,11 +16,19 @@ function App() {
     }
 
     socket.connect();
-    socket.on("connect", () => {
-      socket.emit("join-room", { username, roomId });
-    });
+    socket.emit("join-room", { username, roomId });
     console.log("Joined room:", { username, roomId });
   };
+
+  useEffect(() => {
+    socket.on("user-joined", (data) => {
+      console.log("User joined:", data);
+    });
+
+    return () => {
+      socket.off("user-joined");
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
