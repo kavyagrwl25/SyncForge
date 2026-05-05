@@ -15,33 +15,63 @@ function App() {
       return;
     }
 
-    const roomData = { username, roomId };      // Create an object to store the username and room ID in localStorage
-    localStorage.setItem("roomData", JSON.stringify(roomData));     // Store the room data in localStorage as a JSON string for later retrieval
+    const roomData = { username, roomId };
 
-    socket.connect();
-    socket.emit("join-room", { username, roomId });
-    console.log("Joined room:", { username, roomId });
+    localStorage.setItem("roomData", JSON.stringify(roomData));
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    socket.emit("join-room", roomData);
+
+    console.log("Joined room:", roomData);
+  };
+
+  const handleLeaveRoom = () => {
+    if (socket.connected) {
+      socket.emit("leave-room");
+      socket.disconnect();
+    }
+
+    localStorage.removeItem("roomData");
+
+    setUsername("");
+    setRoomId("");
+
+    console.log("Left room");
   };
 
   useEffect(() => {
     const savedRoomData = localStorage.getItem("roomData");
+
     if (savedRoomData) {
       const { username, roomId } = JSON.parse(savedRoomData);
+
       setUsername(username);
       setRoomId(roomId);
+
       if (!socket.connected) {
         socket.connect();
       }
+
       socket.emit("join-room", { username, roomId });
-      console.log("Auto rejoined room:", { username, roomId });
     }
+
     const handleUserJoined = (data) => {
       console.log("User joined:", data);
     };
+
+    const handleUserLeft = (data) => {
+      console.log("User left:", data);
+    };
+
     socket.on("user-joined", handleUserJoined);
+    socket.on("user-left", handleUserLeft);
 
     return () => {
       socket.off("user-joined", handleUserJoined);
+      socket.off("user-left", handleUserLeft);
     };
   }, []);
 
@@ -74,6 +104,12 @@ function App() {
             Join Room
           </button>
         </form>
+        <button
+          onClick={handleLeaveRoom}
+          className="w-full mt-4 py-3 rounded-lg bg-red-500 text-white font-semibold hover:bg-red-400"
+        >
+          Leave Room
+        </button>
       </div>
     </div>
   );
