@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from "react";
 import { socket } from "./socket";
-import { useEffect } from 'react';
-import './App.css'
+import JoinRoom from "./components/JoinRoom";
+import CodeEditor from "./components/CodeEditor";
+import "./App.css";
 
 function App() {
   const [username, setUsername] = useState("");
   const [roomId, setRoomId] = useState("");
+  const [code, setCode] = useState("");
 
   const handleJoinRoom = (e) => {
     e.preventDefault();
@@ -38,8 +40,20 @@ function App() {
 
     setUsername("");
     setRoomId("");
+    setCode("");
 
     console.log("Left room");
+  };
+
+  const handleCodeChange = (newCode) => {
+    setCode(newCode);
+
+    if (roomId) {
+      socket.emit("code-change", {
+        roomId,
+        code: newCode,
+      });
+    }
   };
 
   useEffect(() => {
@@ -66,50 +80,34 @@ function App() {
       console.log("User left:", data);
     };
 
+    const handleReceiveCode = (newCode) => {
+      setCode(newCode);
+    };
+
+    socket.on("receive-code", handleReceiveCode);
     socket.on("user-joined", handleUserJoined);
     socket.on("user-left", handleUserLeft);
 
     return () => {
       socket.off("user-joined", handleUserJoined);
       socket.off("user-left", handleUserLeft);
+      socket.off("receive-code", handleReceiveCode);
     };
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
-      <div className="w-full max-w-md bg-slate-900 p-8 rounded-2xl shadow-xl">
-        <h1 className="text-3xl font-bold text-center">SyncForge</h1>
-        <p className="text-slate-400 text-center mt-2">
-          Real-time collaborative code editor
-        </p>
+    <div className="min-h-screen bg-slate-950 text-white p-8">
+      <div className="max-w-6xl mx-auto space-y-8">
+        <JoinRoom
+          username={username}
+          setUsername={setUsername}
+          roomId={roomId}
+          setRoomId={setRoomId}
+          handleJoinRoom={handleJoinRoom}
+          handleLeaveRoom={handleLeaveRoom}
+        />
 
-        <form onSubmit={handleJoinRoom} className="mt-8 space-y-4">
-          <input
-            type="text"
-            placeholder="Enter your name"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-slate-800 border border-slate-700 outline-none focus:border-sky-400"
-          />
-
-          <input
-            type="text"
-            placeholder="Enter room ID"
-            value={roomId}
-            onChange={(e) => setRoomId(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-slate-800 border border-slate-700 outline-none focus:border-sky-400"
-          />
-
-          <button className="w-full py-3 rounded-lg bg-sky-400 text-slate-950 font-semibold hover:bg-sky-300">
-            Join Room
-          </button>
-        </form>
-        <button
-          onClick={handleLeaveRoom}
-          className="w-full mt-4 py-3 rounded-lg bg-red-500 text-white font-semibold hover:bg-red-400"
-        >
-          Leave Room
-        </button>
+        <CodeEditor code={code} handleCodeChange={handleCodeChange} />
       </div>
     </div>
   );

@@ -116,4 +116,248 @@
 * Not removing event listeners
 * Creating multiple socket connections
 * Not handling disconnect properly
-* Assuming server memory is permanent
+
+---
+---
+# 📘 Socket.IO + useEffect Revision Notes
+
+# 1. Socket.IO is Event Driven
+
+Socket.IO works using events.
+
+Example:
+
+```js id="x7m2pl"
+socket.on("receive-code", callback);
+```
+
+Meaning:
+
+```text id="s9q4kx"
+"If this event occurs,
+run this callback."
+```
+
+---
+
+# 2. useEffect with Socket.IO
+
+Used for:
+
+* registering listeners
+* cleanup
+* setup logic
+
+Example:
+
+```js id="m3t9qp"
+useEffect(() => {
+
+   socket.on("receive-code", handler);
+
+   return () => {
+      socket.off("receive-code", handler);
+   };
+
+}, []);
+```
+
+---
+
+# 3. Important Understanding
+
+useEffect runs ONLY ONCE because of:
+
+```js id="n4v8zr"
+[]
+```
+
+dependency array.
+
+Its job is only to:
+
+```text id="q1w7fs"
+register listener
+```
+
+---
+
+# 4. What Happens Internally
+
+When:
+
+```js id="b8p3mv"
+socket.on("receive-code", callback);
+```
+
+runs:
+
+Socket.IO internally stores:
+
+```text id="t5j2kl"
+event → callback
+```
+
+Like:
+
+```js id="g6x1df"
+listeners = {
+   "receive-code": [callback]
+}
+```
+
+---
+
+# 5. Very Important Flow
+
+```text id="z8c4hn"
+Component Mounts
+↓
+useEffect Runs
+↓
+Listener Registered
+↓
+Backend Emits Event
+↓
+Socket.IO Executes Callback
+↓
+State Updates
+↓
+React Re-renders
+```
+
+---
+
+# 6. Socket Event DOES NOT Remount Component
+
+Socket event only:
+
+* executes callback
+* updates state
+
+It does NOT:
+
+```text id="u2m6qy"
+mount component again
+```
+
+---
+
+# 7. Re-render vs Remount
+
+## Re-render
+
+Component function runs again because state changed.
+
+Example:
+
+```js id="f1n9cv"
+setCode(newCode);
+```
+
+---
+
+## Remount
+
+Component destroyed and recreated.
+
+Usually happens when:
+
+* page refresh
+* route change
+* component removed
+
+---
+
+# 8. Why useEffect Does NOT Run Again
+
+Because:
+
+```js id="r7w5jk"
+socket.on()
+```
+
+already registered callback once.
+
+Later:
+
+* Socket.IO directly executes callback internally
+* React is not rerunning useEffect
+
+---
+
+# 9. Listener Lifecycle
+
+## socket.on()
+
+Persistent listener.
+
+Runs every time event occurs.
+
+---
+
+## socket.once()
+
+Runs only once.
+
+---
+
+## socket.off()
+
+Removes listener.
+
+---
+
+# 10. Why Cleanup is Important
+
+Without cleanup:
+
+```js id="v4k8mt"
+socket.on(...)
+```
+
+can register multiple listeners.
+
+Result:
+
+* duplicate events
+* multiple callback execution
+* memory leaks
+
+---
+
+# 11. Event Loop Understanding
+
+When backend emits:
+
+```js id="j5d1xp"
+io.emit("receive-code");
+```
+
+JavaScript runtime:
+
+* receives event
+* schedules callback
+* event loop executes callback
+
+---
+
+# 12. SyncForge Real-Time Flow
+
+```text id="c8n3qw"
+User Types Code
+↓
+Frontend detects change
+↓
+socket.emit("code-change")
+↓
+Backend receives event
+↓
+Broadcast to room
+↓
+Other users receive event
+↓
+Listener callback runs
+↓
+Editor updates
+```

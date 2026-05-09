@@ -3,10 +3,10 @@ import { Server } from "socket.io";
 let io;
 const userMap = new Map();
 
-export const initSocket = (server) => {// server is http server created in index.js and passed here to initialize the socket.io server to that server
+export const initSocket = (server) => {
   io = new Server(server, {                          // io is the Socket.IO server instance and is initialized with the HTTP server created in index.js
     cors: {
-      origin: "http://localhost:5173",
+      origin: "http://localhost:5173",            // allow requests from this origin and allow credentials to be sent with requests (like cookies or authorization headers)
       credentials: true,
     },
   });
@@ -23,6 +23,10 @@ io.on("connection", (socket) => {                 // io here is the Socket.IO se
         username,
         message: `${username} joined the room`,
       });
+    });
+
+    socket.on("code-change", ({ roomId, code }) => {
+      socket.to(roomId).emit("receive-code", code);
     });
 
     socket.on("leave-room", () => {
