@@ -1,11 +1,21 @@
+import Editor from "@monaco-editor/react";
+
 function CodeEditor({ code, handleCodeChange }) {
   return (
-    <textarea
-      value={code}
-      onChange={(e) => handleCodeChange(e.target.value)}
-      placeholder="Start writing code..."
-      className="w-full h-[500px] bg-slate-900 text-white p-4 rounded-xl border border-slate-700 outline-none font-mono resize-none"
-    />
+    <div className="h-[500px] border border-slate-700 rounded-xl overflow-hidden">
+      <Editor
+        height="500px"
+        language="javascript"
+        theme="vs-dark"
+        value={code}
+        onChange={(value) => handleCodeChange(value || "")}
+        options={{
+          fontSize: 14,
+          minimap: { enabled: false },
+          automaticLayout: true,
+        }}
+      />
+    </div>
   );
 }
 
