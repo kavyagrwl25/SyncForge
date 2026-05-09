@@ -2,12 +2,15 @@ import { useState, useEffect } from "react";
 import { socket } from "./socket";
 import JoinRoom from "./components/JoinRoom";
 import CodeEditor from "./components/CodeEditor";
+import ActiveUsers from "./components/ActiveUsers";
 import "./App.css";
 
 function App() {
   const [username, setUsername] = useState("");
   const [roomId, setRoomId] = useState("");
   const [code, setCode] = useState("");
+  const [language, setLanguage] = useState("javascript");
+  const [users, setUsers] = useState([]);
 
   const handleJoinRoom = (e) => {
     e.preventDefault();
@@ -31,6 +34,7 @@ function App() {
   };
 
   const handleLeaveRoom = () => {
+    setUsers([]);
     if (socket.connected) {
       socket.emit("leave-room");
       socket.disconnect();
@@ -84,14 +88,20 @@ function App() {
       setCode(newCode);
     };
 
-    socket.on("receive-code", handleReceiveCode);
+    const handleRoomUsers = (usersList) => {
+      setUsers(usersList);
+    };
+
+    socket.on("receive-code", handleReceiveCode);   // whenever recieve-code is emitted, run handleReceiveCode function
     socket.on("user-joined", handleUserJoined);
     socket.on("user-left", handleUserLeft);
+    socket.on("room-users", handleRoomUsers);
 
     return () => {
       socket.off("user-joined", handleUserJoined);
       socket.off("user-left", handleUserLeft);
       socket.off("receive-code", handleReceiveCode);
+      socket.off("room-users", handleRoomUsers);
     };
   }, []);
 
@@ -107,7 +117,15 @@ function App() {
           handleLeaveRoom={handleLeaveRoom}
         />
 
-        <CodeEditor code={code} handleCodeChange={handleCodeChange} />
+        <div className="grid grid-cols-1 md:grid-cols-[250px_1fr] gap-6">
+          <ActiveUsers users={users} />
+          <CodeEditor
+            code={code}
+            language={language}
+            setLanguage={setLanguage}
+            handleCodeChange={handleCodeChange}
+          />
+        </div>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import express from "express";
 import http from "http";
 import cors from "cors";
-import { initSocket } from "./socket.js";
+import { initSocket } from "./socket/socketHandler.js";
 
 const app = express();    // request manager for my http server
 
