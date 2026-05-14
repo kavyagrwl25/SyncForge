@@ -22,7 +22,7 @@ function CodeEditor({ code, language, setLanguage, handleCodeChange }) {
           language={language}
           theme="vs-dark"
           value={code}
-          onChange={(value) => handleCodeChange(value || "")}
+          onChange={(value) => handleCodeChange(value || "")}   // whenever code is changed, run handleCodeChange function with the new code value. If value is null or undefined, use an empty string instead.
           options={{
             fontSize: 14,
             minimap: { enabled: false },

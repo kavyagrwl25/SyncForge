@@ -12,10 +12,10 @@ export const initSocket = (server) => {
     },
   });
 
-io.on("connection", (socket) => {                 // io here is the Socket.IO server instance, and socket is the individual client connection
+io.on("connection", (socket) => {     // io here is the Socket.IO server instance, and socket is the individual client connection
     console.log("User connected:", socket.id);
 
-    socket.on("join-room", ({ username, roomId }) => {
+    socket.on("join-room", ({ username, roomId })=>{//destructured username and roomId from roomData that frontend sent
       socket.join(roomId);
       userMap.set(socket.id, { username, roomId }); // Store the username and room ID in a map using the socket ID as the key for easy retrieval later
       addUserToRoom(roomId, username, socket.id);
@@ -29,7 +29,7 @@ io.on("connection", (socket) => {                 // io here is the Socket.IO se
     });
 
     socket.on("code-change", ({ roomId, code }) => {
-      socket.to(roomId).emit("receive-code", code);
+        socket.to(roomId).emit("receive-code", code);
     });
 
     socket.on("leave-room", () => {
