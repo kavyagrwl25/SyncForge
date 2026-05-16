@@ -18,8 +18,8 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
     socket.on("join-room", ({ username, roomId })=>{//destructured username and roomId from roomData that frontend sent
       socket.join(roomId);
       userMap.set(socket.id, { username, roomId }); // Store the username and room ID in a map using the socket ID as the key for easy retrieval later
-      addUserToRoom(roomId, username, socket.id);
-      io.to(roomId).emit("room-users", getUsersInRoom(roomId));
+      addUserToRoom(roomId, username, socket.id);         // in-memory store update to add this user to this room
+      io.to(roomId).emit("room-users", getUsersInRoom(roomId));   // Emit the updated list of users in the room to all clients in that room
       console.log(`${username} joined room ${roomId}`);
 
       socket.to(roomId).emit("user-joined", {
@@ -31,6 +31,9 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
     socket.on("code-change", ({ roomId, code }) => {
         socket.to(roomId).emit("receive-code", code);
     });
+    socket.on("language-change", ({roomId, language}) => {
+        socket.to(roomId).emit("language-changed", language);
+    })
 
     socket.on("leave-room", () => {
         const user = userMap.get(socket.id);      // Retrieve the user information from the map using the socket ID
@@ -71,7 +74,9 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
   return io;
 };
 
-export const getIO = () => {
+
+
+export const getIO = () => {  // This function is used to get the Socket.IO server instance (io) that we initialized in initSocket. We will use this function in other parts of our server code (like in index.js) to emit events to clients from outside the socket connection handlers.
   if (!io) {
     throw new Error("Socket.io not initialized");
   }

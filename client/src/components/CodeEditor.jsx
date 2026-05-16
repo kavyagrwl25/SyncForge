@@ -1,12 +1,12 @@
 import Editor from "@monaco-editor/react";
 
-function CodeEditor({ code, language, setLanguage, handleCodeChange }) {
+function CodeEditor({ code, language, setLanguage, handleCodeChange, handleLanguageChange }) {
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
         <select
           value={language}
-          onChange={(e) => setLanguage(e.target.value)}
+          onChange={(e) => handleLanguageChange(e.target.value)}
           className="bg-slate-800 text-white px-4 py-2 rounded-lg border border-slate-700 outline-none"
         >
           <option value="javascript">JavaScript</option>

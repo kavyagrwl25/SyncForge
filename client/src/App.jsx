@@ -12,36 +12,32 @@ function App() {
   const [language, setLanguage] = useState("javascript");
   const [users, setUsers] = useState([]);
 
-  const handleJoinRoom = (e) => {
+  const handleJoinRoom = (e) => {   
     e.preventDefault();
-
     if (!username.trim() || !roomId.trim()) {
       alert("Username and Room ID are required");
       return;
     }
-
     const roomData = { username, roomId };
-
-    localStorage.setItem("roomData", JSON.stringify(roomData));
-
+    localStorage.setItem("roomData", JSON.stringify(roomData));   // store the room data in local storage so that it can be retrieved later
     if (!socket.connected) {
-      socket.connect();
+      socket.connect();   
     }
-
     socket.emit("join-room", roomData);
-
     console.log("Joined room:", roomData);
   };
 
   const handleLeaveRoom = () => {
-    setUsers([]);
+    
     if (socket.connected) {
       socket.emit("leave-room");
       socket.disconnect();
     }
 
     localStorage.removeItem("roomData");
-
+    localStorage.removeItem(`syncforge-code-${roomId}`);
+    localStorage.removeItem(`syncforge-language-${roomId}`);
+    setUsers([]);
     setUsername("");
     setRoomId("");
     setCode("");
@@ -51,7 +47,7 @@ function App() {
 
   const handleCodeChange = (newCode) => {
     setCode(newCode);
-
+    localStorage.setItem(`syncforge-code-${roomId}`, newCode);// store the current code in local storage so that it can be retrieved later and that too based on roomId, because different rooms have different code
     if (roomId) {
       socket.emit("code-change", {
         roomId,
@@ -60,19 +56,37 @@ function App() {
     }
   };
 
-  useEffect(() => {
+  const handleLanguageChange = (newLanguage) => {
+    setLanguage(newLanguage);
+    localStorage.setItem(`syncforge-language-${roomId}`, newLanguage); // store the selected language in local storage so that it can be retrieved later that too based on roomId, because different rooms can have different languages
+    if(roomId) {
+      socket.emit("language-change", {
+        roomId,       // emit a language-change event to the backend with the new language and roomId, so that the backend can broadcast the new language to all users in the room
+        language: newLanguage
+      });
+    }
+  }
+
+  useEffect(() => {                                 // My action → handler function &&&& Other user's action → useEffect listener
+
     const savedRoomData = localStorage.getItem("roomData");
 
     if (savedRoomData) {
       const { username, roomId } = JSON.parse(savedRoomData);
-
       setUsername(username);
       setRoomId(roomId);
-
+      // restore room specific language and code from local storage after refresh
+      const savedLanguage = localStorage.getItem(`syncforge-language-${roomId}`);
+      const savedCode = localStorage.getItem(`syncforge-code-${roomId}`);
+      if (savedCode) {
+        setCode(savedCode);
+      }
+      if (savedLanguage) {
+        setLanguage(savedLanguage);
+      }
       if (!socket.connected) {
         socket.connect();
       }
-
       socket.emit("join-room", { username, roomId });
     }
 
@@ -86,22 +100,58 @@ function App() {
 
     const handleReceiveCode = (newCode) => {
       setCode(newCode);
+
+      // update the latest received code in local storage
+      // so that refresh restores latest collaborative code
+
+      const currentRoomData = JSON.parse(localStorage.getItem("roomData"));
+
+      if (currentRoomData?.roomId) {
+        localStorage.setItem(
+          `syncforge-code-${currentRoomData.roomId}`,
+          newCode
+        );
+      }
     };
 
-    const handleRoomUsers = (usersList) => {
+    const handleRoomUsers = (usersList) => {  
+      // usersList is coming from backend whenever there is a change
+      // in active users in room, this function will update the users
+      // state with that usersList
+
       setUsers(usersList);
     };
 
-    socket.on("receive-code", handleReceiveCode);   // whenever recieve-code is emitted, run handleReceiveCode function
+    const handleLanguageChanged = (newLanguage) => {
+      setLanguage(newLanguage);
+
+      // update latest received language in local storage
+
+      const currentRoomData = JSON.parse(localStorage.getItem("roomData"));
+
+      if (currentRoomData?.roomId) {
+        localStorage.setItem(
+          `syncforge-language-${currentRoomData.roomId}`,
+          newLanguage
+        );
+      }
+    };
+
+    socket.on("receive-code", handleReceiveCode);   // whenever receive-code is emitted, run handleReceiveCode function
     socket.on("user-joined", handleUserJoined);
     socket.on("user-left", handleUserLeft);
     socket.on("room-users", handleRoomUsers);
+    socket.on("language-changed", handleLanguageChanged);
 
     return () => {
+      // to prevent memory leaks, we need to clean up the event listeners
+      // when the component unmounts or when dependencies change
+
       socket.off("user-joined", handleUserJoined);
       socket.off("user-left", handleUserLeft);
       socket.off("receive-code", handleReceiveCode);
       socket.off("room-users", handleRoomUsers);
+      socket.off("language-changed", handleLanguageChanged);
     };
   }, []);
 
@@ -124,6 +174,7 @@ function App() {
             language={language}
             setLanguage={setLanguage}
             handleCodeChange={handleCodeChange}
+            handleLanguageChange={handleLanguageChange}
           />
         </div>
       </div>
