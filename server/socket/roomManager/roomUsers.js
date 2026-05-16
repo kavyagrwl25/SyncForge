@@ -11,7 +11,7 @@ export const getUsersInRoom = (roomId) => {   // to get list of users in a room
 export const addUserToRoom = (roomId, username, socketId) => {    // to add a user to a room, basically to update the roomUsers object by adding this user to this room
   if (!roomUsers[roomId]) {
     roomUsers[roomId] = [];     // if room does not exist, first create that room array in the roomUsers object
-  }
+  };
 
   const alreadyExists = roomUsers[roomId].some(   // Check if the user of same socketId already exists in the room to prevent duplicates
     (user) => user.socketId === socketId

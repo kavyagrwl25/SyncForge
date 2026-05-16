@@ -1,5 +1,6 @@
 import { Server } from "socket.io";
-import { getUsersInRoom, addUserToRoom, removeUserFromRoom } from "./roomManager.js";
+import { getUsersInRoom, addUserToRoom, removeUserFromRoom } from "./roomManager/roomUsers.js";
+import { getRoomCode, setRoomCode, deleteRoomCode } from "./roomManager/roomCode.js";
 
 let io;
 const userMap = new Map();
@@ -21,7 +22,7 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
       addUserToRoom(roomId, username, socket.id);         // in-memory store update to add this user to this room
       io.to(roomId).emit("room-users", getUsersInRoom(roomId));   // Emit the updated list of users in the room to all clients in that room
       console.log(`${username} joined room ${roomId}`);
-
+      socket.emit("receive-code", getRoomCode(roomId) || ""); // Send the current code in the room to the newly joined user, if there is any code already present for that room in the roomCode object, otherwise send an empty string
       socket.to(roomId).emit("user-joined", {
         username,
         message: `${username} joined the room`,
@@ -29,6 +30,7 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
     });
 
     socket.on("code-change", ({ roomId, code }) => {
+        setRoomCode(roomId, code);
         socket.to(roomId).emit("receive-code", code);
     });
     socket.on("language-change", ({roomId, language}) => {
@@ -40,18 +42,21 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
         if (!user) return;
         const { username, roomId } = user;      // Retrieve the username and room ID from the map using the socket ID
         removeUserFromRoom(roomId, socket.id);
-        io.to(roomId).emit("room-users", getUsersInRoom(roomId));
+        if (getUsersInRoom(roomId).length === 0) {
+          deleteRoomCode(roomId);
+        }
         socket.to(roomId).emit("user-left", {
           username,
           message: `${username} left the room`,
         });
         socket.leave(roomId);
         userMap.delete(socket.id);
+        io.to(roomId).emit("room-users", getUsersInRoom(roomId));
     });
 
     socket.on("disconnect", () => {
         const user = userMap.get(socket.id);
-
+        
         if (!user) {
             console.log("User disconnected:", socket.id);
             return;
@@ -66,6 +71,9 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
 
         userMap.delete(socket.id);
         removeUserFromRoom(roomId, socket.id);
+        if (getUsersInRoom(roomId).length === 0) {
+          deleteRoomCode(roomId);
+        }
         io.to(roomId).emit("room-users", getUsersInRoom(roomId));
         console.log(`${username} disconnected from room ${roomId}`);
     });
