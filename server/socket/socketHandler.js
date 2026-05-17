@@ -1,6 +1,7 @@
 import { Server } from "socket.io";
 import { getUsersInRoom, addUserToRoom, removeUserFromRoom } from "./roomManager/roomUsers.js";
 import { getRoomCode, setRoomCode, deleteRoomCode } from "./roomManager/roomCode.js";
+import { getRoomLanguage, setRoomLanguage, deleteRoomLanguage } from "./roomManager/roomLanguage.js";
 
 let io;
 const userMap = new Map();
@@ -21,12 +22,12 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
       userMap.set(socket.id, { username, roomId }); // Store the username and room ID in a map using the socket ID as the key for easy retrieval later
       addUserToRoom(roomId, username, socket.id);         // in-memory store update to add this user to this room
       io.to(roomId).emit("room-users", getUsersInRoom(roomId));   // Emit the updated list of users in the room to all clients in that room
-      console.log(`${username} joined room ${roomId}`);
-      socket.emit("receive-code", getRoomCode(roomId) || ""); // Send the current code in the room to the newly joined user, if there is any code already present for that room in the roomCode object, otherwise send an empty string
       socket.to(roomId).emit("user-joined", {
         username,
         message: `${username} joined the room`,
       });
+      socket.emit("receive-code", getRoomCode(roomId) || ""); // Send the current code in the room to the newly joined user, if there is any code already present for that room in the roomCode object, otherwise send an empty string
+      socket.emit("receive-language", getRoomLanguage(roomId) || "javascript"); 
     });
 
     socket.on("code-change", ({ roomId, code }) => {
@@ -34,7 +35,8 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
         socket.to(roomId).emit("receive-code", code);
     });
     socket.on("language-change", ({roomId, language}) => {
-        socket.to(roomId).emit("language-changed", language);
+        setRoomLanguage(roomId, language);
+        socket.to(roomId).emit("receive-language", language);
     })
 
     socket.on("leave-room", () => {
@@ -44,6 +46,7 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
         removeUserFromRoom(roomId, socket.id);
         if (getUsersInRoom(roomId).length === 0) {
           deleteRoomCode(roomId);
+          deleteRoomLanguage(roomId);
         }
         socket.to(roomId).emit("user-left", {
           username,
@@ -52,6 +55,8 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
         socket.leave(roomId);
         userMap.delete(socket.id);
         io.to(roomId).emit("room-users", getUsersInRoom(roomId));
+        socket.disconnect(); // Disconnect the socket after leaving the room
+        console.log(`${username} left room ${roomId}`);
     });
 
     socket.on("disconnect", () => {
@@ -73,6 +78,7 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
         removeUserFromRoom(roomId, socket.id);
         if (getUsersInRoom(roomId).length === 0) {
           deleteRoomCode(roomId);
+          deleteRoomLanguage(roomId);
         }
         io.to(roomId).emit("room-users", getUsersInRoom(roomId));
         console.log(`${username} disconnected from room ${roomId}`);

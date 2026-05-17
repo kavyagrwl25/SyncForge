@@ -3,6 +3,7 @@ import { socket } from "./socket";
 import JoinRoom from "./components/JoinRoom";
 import CodeEditor from "./components/CodeEditor";
 import ActiveUsers from "./components/ActiveUsers";
+import Notifications from "./components/Notifications";
 import "./App.css";
 
 function App() {
@@ -11,6 +12,7 @@ function App() {
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState("javascript");
   const [users, setUsers] = useState([]);
+  const [notifications, setNotifications] = useState([]);
 
   const handleJoinRoom = (e) => {   
     e.preventDefault();
@@ -31,7 +33,6 @@ function App() {
     
     if (socket.connected) {
       socket.emit("leave-room");
-      socket.disconnect();
     }
 
     localStorage.removeItem("roomData");
@@ -67,6 +68,17 @@ function App() {
     }
   }
 
+  const handleNotification = (message) => {
+    setNotifications((prev) => [
+      {
+        id: Date.now(),
+        message,
+        time: new Date().toLocaleTimeString(),
+      },
+      ...prev,
+    ]);
+  };
+
   useEffect(() => {                                 // My action → handler function &&&& Other user's action → useEffect listener
 
     const savedRoomData = localStorage.getItem("roomData");
@@ -89,14 +101,6 @@ function App() {
       }
       socket.emit("join-room", { username, roomId });
     }
-
-    const handleUserJoined = (data) => {
-      console.log("User joined:", data);
-    };
-
-    const handleUserLeft = (data) => {
-      console.log("User left:", data);
-    };
 
     const handleReceiveCode = (newCode) => {
       setCode(newCode);
@@ -122,7 +126,7 @@ function App() {
       setUsers(usersList);
     };
 
-    const handleLanguageChanged = (newLanguage) => {
+    const handleReceiveLanguage = (newLanguage) => {
       setLanguage(newLanguage);
 
       // update latest received language in local storage
@@ -137,21 +141,29 @@ function App() {
       }
     };
 
+    const handleJoinNotification = ({ message }) => {
+      handleNotification(message);
+    };
+
+    const handleLeftNotification = ({ message }) => {
+      handleNotification(message);
+    };
+
     socket.on("receive-code", handleReceiveCode);   // whenever receive-code is emitted, run handleReceiveCode function
-    socket.on("user-joined", handleUserJoined);
-    socket.on("user-left", handleUserLeft);
+    socket.on("user-joined", handleJoinNotification);
+    socket.on("user-left", handleLeftNotification);
     socket.on("room-users", handleRoomUsers);
-    socket.on("language-changed", handleLanguageChanged);
+    socket.on("receive-language", handleReceiveLanguage);
 
     return () => {
       // to prevent memory leaks, we need to clean up the event listeners
       // when the component unmounts or when dependencies change
 
-      socket.off("user-joined", handleUserJoined);
-      socket.off("user-left", handleUserLeft);
+      socket.off("user-joined", handleJoinNotification);
+      socket.off("user-left", handleLeftNotification);
       socket.off("receive-code", handleReceiveCode);
       socket.off("room-users", handleRoomUsers);
-      socket.off("language-changed", handleLanguageChanged);
+      socket.off("receive-language", handleReceiveLanguage);
     };
   }, []);
 
@@ -167,7 +179,7 @@ function App() {
           handleLeaveRoom={handleLeaveRoom}
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-[250px_1fr] gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-[250px_1fr_280px] gap-6 items-start">
           <ActiveUsers users={users} />
           <CodeEditor
             code={code}
@@ -176,6 +188,7 @@ function App() {
             handleCodeChange={handleCodeChange}
             handleLanguageChange={handleLanguageChange}
           />
+          <Notifications notifications={notifications} />
         </div>
       </div>
     </div>
