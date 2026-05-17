@@ -2,9 +2,30 @@ import { Server } from "socket.io";
 import { getUsersInRoom, addUserToRoom, removeUserFromRoom } from "./roomManager/roomUsers.js";
 import { getRoomCode, setRoomCode, deleteRoomCode } from "./roomManager/roomCode.js";
 import { getRoomLanguage, setRoomLanguage, deleteRoomLanguage } from "./roomManager/roomLanguage.js";
+import { createRoomNotification, getRoomNotifications, addRoomNotification, deleteRoomNotifications } from "./roomManager/roomNotifications.js";
 
 let io;
 const userMap = new Map();
+const disconnectTimers = new Map();
+const roomCleanupTimers = new Map();
+
+const scheduleRoomCleanup = (roomId) => {
+  if (roomCleanupTimers.has(roomId)) {
+    clearTimeout(roomCleanupTimers.get(roomId));
+  }
+
+  const timer = setTimeout(() => {
+    if (getUsersInRoom(roomId).length === 0) {
+      deleteRoomCode(roomId);
+      deleteRoomLanguage(roomId);
+      deleteRoomNotifications(roomId);
+    }
+
+    roomCleanupTimers.delete(roomId);
+  }, 5000);
+
+  roomCleanupTimers.set(roomId, timer);
+};
 
 export const initSocket = (server) => {
   io = new Server(server, {                          // io is the Socket.IO server instance and is initialized with the HTTP server created in index.js
@@ -18,10 +39,35 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
     console.log("User connected:", socket.id);
 
     socket.on("join-room", ({ username, roomId })=>{//destructured username and roomId from roomData that frontend sent
+      const reconnectKey = `${roomId}:${username}`;
+      const isReconnect = disconnectTimers.has(reconnectKey);
+      const alreadyInRoom = getUsersInRoom(roomId).some(
+        (user) => user.username === username
+      );
+
+      if (roomCleanupTimers.has(roomId)) {
+        clearTimeout(roomCleanupTimers.get(roomId));
+        roomCleanupTimers.delete(roomId);
+      }
+
+      if (isReconnect) {
+        clearTimeout(disconnectTimers.get(reconnectKey));
+        disconnectTimers.delete(reconnectKey);
+      }
+
       socket.join(roomId);
       userMap.set(socket.id, { username, roomId }); // Store the username and room ID in a map using the socket ID as the key for easy retrieval later
       addUserToRoom(roomId, username, socket.id);         // in-memory store update to add this user to this room
       io.to(roomId).emit("room-users", getUsersInRoom(roomId));   // Emit the updated list of users in the room to all clients in that room
+      socket.emit("room-notifications", getRoomNotifications(roomId));
+      if (!alreadyInRoom && !isReconnect) {
+        const notification = createRoomNotification(
+          `${username} joined the room`,
+          "join"
+        );
+        addRoomNotification(roomId, notification);
+        socket.to(roomId).emit("room-notification", notification);
+      }
       socket.to(roomId).emit("user-joined", {
         username,
         message: `${username} joined the room`,
@@ -43,10 +89,15 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
         const user = userMap.get(socket.id);      // Retrieve the user information from the map using the socket ID
         if (!user) return;
         const { username, roomId } = user;      // Retrieve the username and room ID from the map using the socket ID
+        const notification = createRoomNotification(
+          `${username} left the room`,
+          "leave"
+        );
+        addRoomNotification(roomId, notification);
+        socket.to(roomId).emit("room-notification", notification);
         removeUserFromRoom(roomId, socket.id);
         if (getUsersInRoom(roomId).length === 0) {
-          deleteRoomCode(roomId);
-          deleteRoomLanguage(roomId);
+          scheduleRoomCleanup(roomId);
         }
         socket.to(roomId).emit("user-left", {
           username,
@@ -68,6 +119,7 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
         }
 
         const { username, roomId } = user;
+        const reconnectKey = `${roomId}:${username}`;
 
         socket.to(roomId).emit("user-left", {
             username,
@@ -77,10 +129,28 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
         userMap.delete(socket.id);
         removeUserFromRoom(roomId, socket.id);
         if (getUsersInRoom(roomId).length === 0) {
-          deleteRoomCode(roomId);
-          deleteRoomLanguage(roomId);
+          scheduleRoomCleanup(roomId);
         }
         io.to(roomId).emit("room-users", getUsersInRoom(roomId));
+        const disconnectTimer = setTimeout(() => {
+          disconnectTimers.delete(reconnectKey);
+
+          const usersInRoom = getUsersInRoom(roomId);
+          const hasRejoined = usersInRoom.some((user) => user.username === username);
+
+          if (hasRejoined || usersInRoom.length === 0) {
+            return;
+          }
+
+          const notification = createRoomNotification(
+            `${username} disconnected`,
+            "disconnect"
+          );
+          addRoomNotification(roomId, notification);
+          io.to(roomId).emit("room-notification", notification);
+        }, 3000);
+
+        disconnectTimers.set(reconnectKey, disconnectTimer);
         console.log(`${username} disconnected from room ${roomId}`);
     });
   });

@@ -4,7 +4,6 @@ import JoinRoom from "./components/JoinRoom";
 import CodeEditor from "./components/CodeEditor";
 import ActiveUsers from "./components/ActiveUsers";
 import Notifications from "./components/Notifications";
-import "./App.css";
 
 function App() {
   const [username, setUsername] = useState("");
@@ -14,7 +13,7 @@ function App() {
   const [users, setUsers] = useState([]);
   const [notifications, setNotifications] = useState([]);
 
-  const handleJoinRoom = (e) => {   
+  const handleJoinRoom = (e) => {
     e.preventDefault();
     if (!username.trim() || !roomId.trim()) {
       alert("Username and Room ID are required");
@@ -23,14 +22,13 @@ function App() {
     const roomData = { username, roomId };
     localStorage.setItem("roomData", JSON.stringify(roomData));   // store the room data in local storage so that it can be retrieved later
     if (!socket.connected) {
-      socket.connect();   
+      socket.connect();
     }
     socket.emit("join-room", roomData);
     console.log("Joined room:", roomData);
   };
 
   const handleLeaveRoom = () => {
-    
     if (socket.connected) {
       socket.emit("leave-room");
     }
@@ -42,6 +40,7 @@ function App() {
     setUsername("");
     setRoomId("");
     setCode("");
+    setNotifications([]);
 
     console.log("Left room");
   };
@@ -60,27 +59,15 @@ function App() {
   const handleLanguageChange = (newLanguage) => {
     setLanguage(newLanguage);
     localStorage.setItem(`syncforge-language-${roomId}`, newLanguage); // store the selected language in local storage so that it can be retrieved later that too based on roomId, because different rooms can have different languages
-    if(roomId) {
+    if (roomId) {
       socket.emit("language-change", {
         roomId,       // emit a language-change event to the backend with the new language and roomId, so that the backend can broadcast the new language to all users in the room
         language: newLanguage
       });
     }
-  }
-
-  const handleNotification = (message) => {
-    setNotifications((prev) => [
-      {
-        id: Date.now(),
-        message,
-        time: new Date().toLocaleTimeString(),
-      },
-      ...prev,
-    ]);
   };
 
-  useEffect(() => {                                 // My action → handler function &&&& Other user's action → useEffect listener
-
+  useEffect(() => {                                 // My action â†’ handler function &&&& Other user's action â†’ useEffect listener
     const savedRoomData = localStorage.getItem("roomData");
 
     if (savedRoomData) {
@@ -118,7 +105,7 @@ function App() {
       }
     };
 
-    const handleRoomUsers = (usersList) => {  
+    const handleRoomUsers = (usersList) => {
       // usersList is coming from backend whenever there is a change
       // in active users in room, this function will update the users
       // state with that usersList
@@ -141,17 +128,17 @@ function App() {
       }
     };
 
-    const handleJoinNotification = ({ message }) => {
-      handleNotification(message);
+    const handleRoomNotifications = (notificationsList) => {
+      setNotifications(notificationsList);
     };
 
-    const handleLeftNotification = ({ message }) => {
-      handleNotification(message);
+    const handleRoomNotification = (notification) => {
+      setNotifications((prev) => [notification, ...prev].slice(0, 30));
     };
 
     socket.on("receive-code", handleReceiveCode);   // whenever receive-code is emitted, run handleReceiveCode function
-    socket.on("user-joined", handleJoinNotification);
-    socket.on("user-left", handleLeftNotification);
+    socket.on("room-notifications", handleRoomNotifications);
+    socket.on("room-notification", handleRoomNotification);
     socket.on("room-users", handleRoomUsers);
     socket.on("receive-language", handleReceiveLanguage);
 
@@ -159,8 +146,8 @@ function App() {
       // to prevent memory leaks, we need to clean up the event listeners
       // when the component unmounts or when dependencies change
 
-      socket.off("user-joined", handleJoinNotification);
-      socket.off("user-left", handleLeftNotification);
+      socket.off("room-notifications", handleRoomNotifications);
+      socket.off("room-notification", handleRoomNotification);
       socket.off("receive-code", handleReceiveCode);
       socket.off("room-users", handleRoomUsers);
       socket.off("receive-language", handleReceiveLanguage);
@@ -168,8 +155,8 @@ function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-8">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-950 px-4 py-6 text-white sm:px-6 sm:py-8">
+      <div className="mx-auto max-w-7xl space-y-6">
         <JoinRoom
           username={username}
           setUsername={setUsername}
@@ -179,7 +166,7 @@ function App() {
           handleLeaveRoom={handleLeaveRoom}
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-[250px_1fr_280px] gap-6 items-start">
+        <div className="grid grid-cols-1 gap-6 items-start lg:grid-cols-[250px_1fr_280px]">
           <ActiveUsers users={users} />
           <CodeEditor
             code={code}
