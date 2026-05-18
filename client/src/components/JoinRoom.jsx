@@ -41,6 +41,7 @@ function JoinRoom({
       >
         Leave Room
       </button>
+    
     </div>
   );
 }

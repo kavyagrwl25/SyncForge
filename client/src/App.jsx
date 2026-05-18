@@ -4,6 +4,8 @@ import JoinRoom from "./components/JoinRoom";
 import CodeEditor from "./components/CodeEditor";
 import ActiveUsers from "./components/ActiveUsers";
 import Notifications from "./components/Notifications";
+import Header from "./components/Header"; 
+import throttle from "lodash/throttle";
 
 function App() {
   const [username, setUsername] = useState("");
@@ -12,6 +14,7 @@ function App() {
   const [language, setLanguage] = useState("javascript");
   const [users, setUsers] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [connectionStatus, setConnectionStatus] = useState("Disconnected");
 
   const handleJoinRoom = (e) => {
     e.preventDefault();
@@ -141,6 +144,15 @@ function App() {
     socket.on("room-notification", handleRoomNotification);
     socket.on("room-users", handleRoomUsers);
     socket.on("receive-language", handleReceiveLanguage);
+    socket.on("connect", () => {
+      setConnectionStatus("Connected");
+    });
+    socket.on("disconnect", () => {
+      setConnectionStatus("Disconnected");
+    });
+    socket.io.on("reconnect_attempt", () => {
+      setConnectionStatus("Reconnecting...");
+    });
 
     return () => {
       // to prevent memory leaks, we need to clean up the event listeners
@@ -151,6 +163,9 @@ function App() {
       socket.off("receive-code", handleReceiveCode);
       socket.off("room-users", handleRoomUsers);
       socket.off("receive-language", handleReceiveLanguage);
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.io.off("reconnect_attempt");
     };
   }, []);
 
@@ -165,6 +180,7 @@ function App() {
           handleJoinRoom={handleJoinRoom}
           handleLeaveRoom={handleLeaveRoom}
         />
+        <Header roomId={roomId} connectionStatus={connectionStatus} />
 
         <div className="grid grid-cols-1 gap-6 items-start lg:grid-cols-[250px_1fr_280px]">
           <ActiveUsers users={users} />
