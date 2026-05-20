@@ -1,1 +1,9 @@
 @import "tailwindcss";
+.remote-cursor {
+  border-left: 2px solid #f87171;
+  box-sizing: border-box;
+  display: inline-block;
+  height: 1.25em;
+  margin-left: -1px;
+  pointer-events: none;
+}

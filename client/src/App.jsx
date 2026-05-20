@@ -15,6 +15,7 @@ function App() {
   const [users, setUsers] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState("Disconnected");
+  const [remoteCursors, setRemoteCursors] = useState({});
 
   const handleJoinRoom = (e) => {
     e.preventDefault();
@@ -44,6 +45,7 @@ function App() {
     setRoomId("");
     setCode("");
     setNotifications([]);
+    setRemoteCursors({});
 
     console.log("Left room");
   };
@@ -70,7 +72,21 @@ function App() {
     }
   };
 
-  useEffect(() => {                                 // My action â†’ handler function &&&& Other user's action â†’ useEffect listener
+  const handleCursorPositionChanged = (cursorData) => {
+    console.log("[cursor][frontend] received cursor-position-changed", cursorData);
+
+    setRemoteCursors((prev) => ({
+      ...prev,
+      [cursorData.socketId]: cursorData,
+    }));
+  };
+
+  useEffect(() => {
+    console.log("[cursor][frontend] remoteCursors state updated", remoteCursors);
+  }, [remoteCursors]);
+
+  useEffect(() => {      // My actions trigger normal event handlers WHILE Other users' actions are handled by socket listeners inside useEffect
+    
     const savedRoomData = localStorage.getItem("roomData");
 
     if (savedRoomData) {
@@ -113,7 +129,15 @@ function App() {
       // in active users in room, this function will update the users
       // state with that usersList
 
+      console.log("[cursor][frontend] room-users update", usersList);
       setUsers(usersList);
+      setRemoteCursors((prev) =>
+        Object.fromEntries(
+          Object.entries(prev).filter(([socketId]) =>
+            usersList.some((user) => user.socketId === socketId)
+          )
+        )
+      );
     };
 
     const handleReceiveLanguage = (newLanguage) => {
@@ -144,13 +168,17 @@ function App() {
     socket.on("room-notification", handleRoomNotification);
     socket.on("room-users", handleRoomUsers);
     socket.on("receive-language", handleReceiveLanguage);
+    socket.on("cursor-position-changed", handleCursorPositionChanged);
     socket.on("connect", () => {
+      console.log("[socket][frontend] connected", socket.id);
       setConnectionStatus("Connected");
     });
     socket.on("disconnect", () => {
+      console.log("[socket][frontend] disconnected");
       setConnectionStatus("Disconnected");
     });
     socket.io.on("reconnect_attempt", () => {
+      console.log("[socket][frontend] reconnect_attempt");
       setConnectionStatus("Reconnecting...");
     });
 
@@ -163,12 +191,13 @@ function App() {
       socket.off("receive-code", handleReceiveCode);
       socket.off("room-users", handleRoomUsers);
       socket.off("receive-language", handleReceiveLanguage);
+      socket.off("cursor-position-changed", handleCursorPositionChanged);
       socket.off("connect");
       socket.off("disconnect");
       socket.io.off("reconnect_attempt");
     };
   }, []);
-
+ 
   return (
     <div className="min-h-screen bg-slate-950 px-4 py-6 text-white sm:px-6 sm:py-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -187,7 +216,9 @@ function App() {
           <CodeEditor
             code={code}
             language={language}
-            setLanguage={setLanguage}
+            roomId={roomId}
+            username={username}
+            remoteCursors={remoteCursors}
             handleCodeChange={handleCodeChange}
             handleLanguageChange={handleLanguageChange}
           />

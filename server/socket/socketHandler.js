@@ -39,7 +39,7 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
     console.log("User connected:", socket.id);
 
     socket.on("join-room", ({ username, roomId })=>{//destructured username and roomId from roomData that frontend sent
-      const reconnectKey = `${roomId}:${username}`;
+      const reconnectKey = `${roomId}:${username}`;   // Create a unique key for the user based on their username and room ID to track reconnections. This key will be used to check if the user is reconnecting after a disconnect, allowing us to restore their session without treating it as a new join.
       const isReconnect = disconnectTimers.has(reconnectKey);
       const alreadyInRoom = getUsersInRoom(roomId).some(
         (user) => user.username === username
@@ -72,11 +72,11 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
         username,
         message: `${username} joined the room`,
       });
-      socket.emit("receive-code", getRoomCode(roomId) || ""); // Send the current code in the room to the newly joined user, if there is any code already present for that room in the roomCode object, otherwise send an empty string
+      socket.emit("receive-code", getRoomCode(roomId) || ""); // this is for the user who just joined, we want to send them the latest code in the room so that their editor can be in sync with everyone else's. If there's no code in the room yet, we send an empty string.
       socket.emit("receive-language", getRoomLanguage(roomId) || "javascript"); 
     });
 
-    socket.on("code-change", ({ roomId, code }) => {
+    socket.on("code-change", ({ roomId, code }) => {    // this is for when a user makes change in editor, other roommates gets the new code
         setRoomCode(roomId, code);
         socket.to(roomId).emit("receive-code", code);
     });
@@ -84,6 +84,33 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
         setRoomLanguage(roomId, language);
         socket.to(roomId).emit("receive-language", language);
     })
+    socket.on("cursor-position-change", ({ roomId, username, lineNumber, column }) => {
+        if (!roomId || !username || !lineNumber || !column) return;
+
+        console.log("[cursor][backend] received cursor-position-change", {
+          socketId: socket.id,
+          roomId,
+          username,
+          lineNumber,
+          column,
+        });
+
+        const payload = {
+          socketId: socket.id,
+          username,
+          lineNumber,
+          column,
+        };
+
+        console.log("[cursor][backend] broadcasting cursor-position-changed", {
+          roomId,
+          payload,
+        });
+
+        socket.to(roomId).emit("cursor-position-changed", {
+          ...payload,
+        });
+    });
 
     socket.on("leave-room", () => {
         const user = userMap.get(socket.id);      // Retrieve the user information from the map using the socket ID
