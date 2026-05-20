@@ -21,3 +21,6 @@ client/dist
 # server
 server/node_modules
 client/node_modules
+
+#docs
+tasks.md
