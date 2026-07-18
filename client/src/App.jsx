@@ -5,7 +5,6 @@ import CodeEditor from "./components/CodeEditor";
 import ActiveUsers from "./components/ActiveUsers";
 import Notifications from "./components/Notifications";
 import Header from "./components/Header"; 
-import throttle from "lodash/throttle";
 
 function App() {
   const [username, setUsername] = useState("");
@@ -15,7 +14,7 @@ function App() {
   const [users, setUsers] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState("Disconnected");
-  const [remoteCursors, setRemoteCursors] = useState({});
+  const [remoteCursors, setRemoteCursors] = useState({});       
 
   const handleJoinRoom = (e) => {
     e.preventDefault();
@@ -105,7 +104,7 @@ function App() {
       if (!socket.connected) {
         socket.connect();
       }
-      socket.emit("join-room", { username, roomId });
+      socket.emit("join-room", { username, roomId });     // rejoin the room after refresh
     }
 
     const handleReceiveCode = (newCode) => {
@@ -140,7 +139,7 @@ function App() {
       );
     };
 
-    const handleReceiveLanguage = (newLanguage) => {
+    const handleReceiveLanguage = (newLanguage) => {    // 
       setLanguage(newLanguage);
 
       // update latest received language in local storage

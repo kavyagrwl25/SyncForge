@@ -1,4 +1,4 @@
-import { io } from "socket.io-client";
+import { io } from "socket.io-client";    // io is a function that creates a new socket connection to the server, allowing the client to communicate with the server in real-time using WebSockets.
 
 export const socket = io("http://localhost:4000", {
   autoConnect: false,

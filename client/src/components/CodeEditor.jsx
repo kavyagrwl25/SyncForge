@@ -26,15 +26,15 @@ function CodeEditor({
     usernameRef.current = username;
   }, [username]);
 
-  const handleEditorDidMount = (editor, monaco) => {
+  const handleEditorDidMount = (editor, monaco) => {        
     editorRef.current = editor;
     monacoRef.current = monaco;
     console.log("[cursor][frontend] Monaco editor mounted");
 
-    cursorListenerRef.current = editor.onDidChangeCursorPosition((event) => {
+    cursorListenerRef.current = editor.onDidChangeCursorPosition((event) => {   // Listen for cursor position changes in the editor
       if (!roomIdRef.current || !usernameRef.current) return;
 
-      const payload = {
+      const payload = {                     // Create a payload with the current roomId, username, lineNumber, and column
         roomId: roomIdRef.current,
         username: usernameRef.current,
         lineNumber: event.position.lineNumber,
@@ -46,7 +46,7 @@ function CodeEditor({
     });
   };
 
-  useEffect(() => {
+  useEffect(() => {                   // Listen for changes in the remoteCursors state and update the editor decorations accordingly
     if (!editorRef.current || !monacoRef.current || !remoteCursors) return;
 
     const decorations = Object.values(remoteCursors)

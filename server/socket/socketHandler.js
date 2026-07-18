@@ -28,7 +28,7 @@ const scheduleRoomCleanup = (roomId) => {
 };
 
 export const initSocket = (server) => {
-  io = new Server(server, {                          // io is the Socket.IO server instance and is initialized with the HTTP server created in index.js
+  io = new Server(server, {       // io is the Socket.IO server instance (socket.io server manager just like app for http req) and is initialized with the HTTP server created in index.js
     cors: {
       origin: "http://localhost:5173",            // allow requests from this origin and allow credentials to be sent with requests (like cookies or authorization headers)
       credentials: true,

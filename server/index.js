@@ -1,7 +1,7 @@
-import express from "express";
-import http from "http";
-import cors from "cors";
-import { initSocket } from "./socket/socketHandler.js";
+import express from "express";      // express here is a request manager for my http server which will handle incoming requests from client and send responses back to client
+import http from "http";          // this is actually the http server which will listen for incoming requests from client which will be handled by express request manager and send responses back to client
+import cors from "cors";          // cors is a middleware that allows cross-origin requests from the client to the server, which is necessary for our application since the client and server are running on different ports
+import { initSocket } from "./socket/socketHandler.js";     // this is a function that initializes the socket connection to the server and handles all the socket events that are emitted from the client and server
 
 const app = express();    // request manager for my http server
 
