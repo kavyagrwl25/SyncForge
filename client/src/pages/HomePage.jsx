@@ -9,6 +9,7 @@ function HomePage() {
    const navigate = useNavigate();
    const [username, setUsername] = useState("");
    const [roomId, setRoomId] = useState("");
+   
    const handleJoinRoom = (e) => {
     e.preventDefault();
     if (!username.trim() || !roomId.trim()) {

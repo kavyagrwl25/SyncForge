@@ -4,7 +4,7 @@ function JoinRoom({
   roomId,
   setRoomId,
   handleJoinRoom,
-  handleLeaveRoom,
+  
 }) {
   return (
     <div className="mx-auto w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl p-4">
@@ -35,12 +35,12 @@ function JoinRoom({
         </button>
       </form>
 
-      <button
+      {/* <button
         onClick={handleLeaveRoom}
         className="mt-4 w-full bg-red-600 hover:bg-red-700 rounded-lg px-4 py-2 font-medium text-white transition-colors"
       >
         Leave Room
-      </button>
+      </button> */}
     
     </div>
   );

@@ -189,6 +189,7 @@ function EditorPage() {
       <Header
         roomId={roomId}
         connectionStatus={connectionStatus}
+        handleLeaveRoom={handleLeaveRoom}
       />
 
       <div className="grid grid-cols-1 gap-6 items-start lg:grid-cols-[250px_1fr_280px]">

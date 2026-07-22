@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-const Header = ({ roomId, connectionStatus }) => {
+const Header = ({ roomId, connectionStatus, handleLeaveRoom }) => {
   const [buttonText, setButtonText] = useState("Copy Room ID");
 
   const handleCopyRoomId = async () => {
@@ -57,6 +57,12 @@ const Header = ({ roomId, connectionStatus }) => {
         >
           Status: {connectionStatus}
         </p>
+        <button
+          onClick={handleLeaveRoom}
+          className="mt-4 w-full bg-red-600 hover:bg-red-700 rounded-lg px-4 py-2 font-medium text-white transition-colors"
+        >
+          Leave Room
+      </button>
       </div>
 
       <button
