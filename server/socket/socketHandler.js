@@ -74,7 +74,13 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
       });
       socket.emit("receive-code", getRoomCode(roomId) || ""); // this is for the user who just joined, we want to send them the latest code in the room so that their editor can be in sync with everyone else's. If there's no code in the room yet, we send an empty string.
       socket.emit("receive-language", getRoomLanguage(roomId) || "javascript"); 
+      socket.emit("room-joined", {
+        roomId,
+        username,
+      });
     });
+
+    
 
     socket.on("code-change", ({ roomId, code }) => {    // this is for when a user makes change in editor, other roommates gets the new code
         setRoomCode(roomId, code);
