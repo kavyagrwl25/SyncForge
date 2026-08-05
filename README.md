@@ -180,6 +180,13 @@ Currently improving:
 
 ---
 
+## Performance Benchmarking
+- 📊 Real-time performance monitoring
+
+
+
+---
+
 # 📚 Key Learnings
 
 - Real-time architecture using Socket.IO
