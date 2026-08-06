@@ -11,9 +11,9 @@ function CodeEditor({
   handleCodeChange,
   handleLanguageChange,
 }) {
-  const editorRef = useRef(null);
-  const monacoRef = useRef(null);
-  const decorationsRef = useRef([]);
+  const editorRef = useRef(null);     // Store a reference to the Monaco editor instance and using useRef to persist the reference across re-renders
+  const monacoRef = useRef(null);     // Store a reference to the Monaco instance...
+  const decorationsRef = useRef([]);    // Store a reference to the current decorations applied to the editor, which will be used to manage and update the remote cursor decorations
   const cursorListenerRef = useRef(null);
   const roomIdRef = useRef(roomId);
   const usernameRef = useRef(username);
@@ -22,11 +22,11 @@ function CodeEditor({
     roomIdRef.current = roomId;
   }, [roomId]);
 
-  useEffect(() => {
+  useEffect(() => {     
     usernameRef.current = username;
   }, [username]);
 
-  const handleEditorDidMount = (editor, monaco) => {        
+  const handleEditorDidMount = (editor, monaco) => {          // Store references to the editor and monaco instances, and set up a listener for cursor position changes       
     editorRef.current = editor;
     monacoRef.current = monaco;
     console.log("[cursor][frontend] Monaco editor mounted");
@@ -89,7 +89,7 @@ function CodeEditor({
     );
   }, [remoteCursors]);
 
-  useEffect(() => {
+  useEffect(() => {       // Cleanup function to dispose of the cursor listener and remove decorations when the component unmounts
     return () => {
       if (cursorListenerRef.current) {
         cursorListenerRef.current.dispose();

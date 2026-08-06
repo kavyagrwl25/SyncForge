@@ -62,7 +62,7 @@ function EditorPage() {
   const handleCursorPositionChanged = (cursorData) => {
     console.log("[cursor][frontend] received cursor-position-changed", cursorData);
 
-    setRemoteCursors((prev) => ({
+    setRemoteCursors((prev) => ({ 
       ...prev,
       [cursorData.socketId]: cursorData,
     }));
