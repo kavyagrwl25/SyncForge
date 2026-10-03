@@ -14,7 +14,9 @@ function EditorPage() {
   const [language, setLanguage] = useState("javascript");
   const [users, setUsers] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [connectionStatus, setConnectionStatus] = useState("Disconnected");
+  const [connectionStatus, setConnectionStatus] = useState(
+    socket.connected ? "Connected" : "Disconnected"
+  );
   const [remoteCursors, setRemoteCursors] = useState({});   
   const {roomId} = useParams();   // this is initial implementation, because we must validate the roomID at backend when user clicks join room at homePage
 
