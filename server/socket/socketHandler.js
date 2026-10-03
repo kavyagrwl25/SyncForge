@@ -35,12 +35,14 @@ export const initSocket = (server) => {
     },
   });
 
-io.on("connection", (socket) => {     // io here is the Socket.IO server instance, and socket is the individual client connection
-    console.log("User connected:", socket.id);
+io.on("connection", (socket) => {     // on fresh connection, send code, language if already present in the room
+    console.log("User connected: (socket id)=>", socket.id);
 
     socket.on("join-room", ({ username, roomId })=>{//destructured username and roomId from roomData that frontend sent
       const reconnectKey = `${roomId}:${username}`;   // Create a unique key for the user based on their username and room ID to track reconnections. This key will be used to check if the user is reconnecting after a disconnect, allowing us to restore their session without treating it as a new join.
       const isReconnect = disconnectTimers.has(reconnectKey);
+
+        // Check if the user is already in the room to prevent duplicate joins. This is done by checking if any user in the room has the same username as the one trying to join.
       const alreadyInRoom = getUsersInRoom(roomId).some(
         (user) => user.username === username
       );
@@ -55,9 +57,9 @@ io.on("connection", (socket) => {     // io here is the Socket.IO server instanc
         disconnectTimers.delete(reconnectKey);
       }
 
-      socket.join(roomId);
+      socket.join(roomId); 
       userMap.set(socket.id, { username, roomId }); // Store the username and room ID in a map using the socket ID as the key for easy retrieval later
-      addUserToRoom(roomId, username, socket.id);         // in-memory store update to add this user to this room
+      addUserToRoom(roomId, username, socket.id);   // in-memory store update to add this user to this room
       io.to(roomId).emit("room-users", getUsersInRoom(roomId));   // Emit the updated list of users in the room to all clients in that room
       socket.emit("room-notifications", getRoomNotifications(roomId));
       if (!alreadyInRoom && !isReconnect) {

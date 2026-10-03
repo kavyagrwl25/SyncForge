@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
+
 import Editor from "@monaco-editor/react";
+
 import { socket } from "../socket";
 
 function CodeEditor({
@@ -11,44 +13,78 @@ function CodeEditor({
   handleCodeChange,
   handleLanguageChange,
 }) {
-  const editorRef = useRef(null);     // Store a reference to the Monaco editor instance and using useRef to persist the reference across re-renders
-  const monacoRef = useRef(null);     // Store a reference to the Monaco instance...
-  const decorationsRef = useRef([]);    // Store a reference to the current decorations applied to the editor, which will be used to manage and update the remote cursor decorations
+  // Store a reference to the Monaco editor instance.
+  // useRef persists this reference across re-renders.
+  const editorRef = useRef(null);
+
+  // Store a reference to the Monaco instance.
+  const monacoRef = useRef(null);
+
+  // Store the current remote cursor decorations so they can
+  // be replaced when remote cursor positions change.
+  const decorationsRef = useRef([]);
+
+  // Store the cursor listener so it can be disposed when
+  // the component is unmounted.
   const cursorListenerRef = useRef(null);
+
+  // Keep the latest roomId available inside event listeners
+  // without recreating those listeners whenever roomId changes.
   const roomIdRef = useRef(roomId);
+
+  // Keep the latest username available inside event listeners
+  // without recreating those listeners whenever username changes.
   const usernameRef = useRef(username);
 
+  // Update the roomId ref whenever the roomId prop changes.
   useEffect(() => {
     roomIdRef.current = roomId;
   }, [roomId]);
 
-  useEffect(() => {     
+  // Update the username ref whenever the username prop changes.
+  useEffect(() => {
     usernameRef.current = username;
   }, [username]);
 
-  const handleEditorDidMount = (editor, monaco) => {          // Store references to the editor and monaco instances, and set up a listener for cursor position changes       
+  // Called once when Monaco finishes mounting.
+  // Stores the editor/Monaco references and sets up the
+  // listener for the current user's cursor position.
+  const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+
     console.log("[cursor][frontend] Monaco editor mounted");
 
-    cursorListenerRef.current = editor.onDidChangeCursorPosition((event) => {   // Listen for cursor position changes in the editor
-      if (!roomIdRef.current || !usernameRef.current) return;
+    // Listen for cursor position changes in the editor.
+    cursorListenerRef.current = editor.onDidChangeCursorPosition(
+      (event) => {
+        // Do not send cursor information if the user or room
+        // information is not available yet.
+        if (!roomIdRef.current || !usernameRef.current) return;
 
-      const payload = {                     // Create a payload with the current roomId, username, lineNumber, and column
-        roomId: roomIdRef.current,
-        username: usernameRef.current,
-        lineNumber: event.position.lineNumber,
-        column: event.position.column,
-      };
+        // Create the payload containing the current user's
+        // cursor position and room information.
+        const payload = {
+          roomId: roomIdRef.current,
+          username: usernameRef.current,
+          lineNumber: event.position.lineNumber,
+          column: event.position.column,
+        };
 
-      console.log("[cursor][frontend] emitting cursor-position-change", payload);
-      socket.emit("cursor-position-change", payload);
-    });
+        // Send the cursor position to the server.
+        socket.emit("cursor-position-change", payload);
+      }
+    );
   };
 
-  useEffect(() => {                   // Listen for changes in the remoteCursors state and update the editor decorations accordingly
-    if (!editorRef.current || !monacoRef.current || !remoteCursors) return;
+  // Listen for changes in remoteCursors and update the
+  // corresponding cursor decorations inside Monaco.
+  useEffect(() => {
+    if (!editorRef.current || !monacoRef.current || !remoteCursors) {
+      return;
+    }
 
+    // Convert each remote cursor into a Monaco decoration.
     const decorations = Object.values(remoteCursors)
       .filter(
         (cursor) =>
@@ -58,12 +94,17 @@ function CodeEditor({
           cursor.column > 0
       )
       .map((cursor) => ({
+        // Create a zero-length range at the remote user's
+        // current cursor position.
         range: new monacoRef.current.Range(
           cursor.lineNumber,
           cursor.column,
           cursor.lineNumber,
           cursor.column
         ),
+
+        // Display the remote cursor and show the username
+        // when the cursor is hovered.
         options: {
           beforeContentClassName: "remote-cursor",
           hoverMessage: {
@@ -78,6 +119,8 @@ function CodeEditor({
       nextDecorations: decorations,
     });
 
+    // Replace the previous decorations with the new
+    // remote cursor decorations.
     decorationsRef.current = editorRef.current.deltaDecorations(
       decorationsRef.current,
       decorations
@@ -89,14 +132,20 @@ function CodeEditor({
     );
   }, [remoteCursors]);
 
-  useEffect(() => {       // Cleanup function to dispose of the cursor listener and remove decorations when the component unmounts
+  // Cleanup function that runs when the component unmounts.
+  // Dispose of the cursor listener and remove the remaining
+  // remote cursor decorations.
+  useEffect(() => {
     return () => {
       if (cursorListenerRef.current) {
         cursorListenerRef.current.dispose();
       }
 
       if (editorRef.current) {
-        editorRef.current.deltaDecorations(decorationsRef.current, []);
+        editorRef.current.deltaDecorations(
+          decorationsRef.current,
+          []
+        );
       }
     };
   }, []);
@@ -105,7 +154,10 @@ function CodeEditor({
     <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-white">Code Editor</h2>
+          <h2 className="text-lg font-semibold text-white">
+            Code Editor
+          </h2>
+
           <p className="text-sm text-slate-400">
             Write and sync code in real time
           </p>
@@ -128,9 +180,16 @@ function CodeEditor({
           height="500px"
           language={language}
           theme="vs-dark"
-          value={code}
+          value={code} // Set the initial value of the editor to the code prop
+
+          // Monaco's onChange gives us the complete current
+          // editor content. This is the full-document sync flow.
           onChange={(value) => handleCodeChange(value || "")}
+
+          // Call handleEditorDidMount when Monaco is mounted
+          // to store references and set up the cursor listener.
           onMount={handleEditorDidMount}
+
           options={{
             minimap: { enabled: false },
             automaticLayout: true,

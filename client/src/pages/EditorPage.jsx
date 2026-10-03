@@ -9,21 +9,19 @@ import { useNavigate, useParams } from "react-router-dom";
 function EditorPage() {
 
   const navigate = useNavigate();
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState("");  // get it from localstorage, because when user refreshes the page, we need to restore the username from localstorage
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState("javascript");
   const [users, setUsers] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState("Disconnected");
   const [remoteCursors, setRemoteCursors] = useState({});   
-  const {roomId} = useParams();
+  const {roomId} = useParams();   // this is initial implementation, because we must validate the roomID at backend when user clicks join room at homePage
 
   const handleLeaveRoom = () => {
     if (socket.connected) {
       socket.emit("leave-room");
-      
     }
-
     localStorage.removeItem("roomData");
     localStorage.removeItem(`syncforge-code-${roomId}`);
     localStorage.removeItem(`syncforge-language-${roomId}`);
@@ -34,13 +32,18 @@ function EditorPage() {
     setRemoteCursors({});
     socket.disconnect();
     console.log("Left room");
-    navigate("/");
+    navigate("/"); // navigate back to home page after leaving the room
   };
 
   const handleCodeChange = (newCode) => {
     setCode(newCode);
-    localStorage.setItem(`syncforge-code-${roomId}`, newCode);// store the current code in local storage so that it can be retrieved later and that too based on roomId, because different rooms have different code
-    if (roomId) {
+
+    localStorage.setItem( // store the latest code in local storage so that refresh restores latest collaborative code
+      `syncforge-code-${roomId}`,
+      newCode
+    );
+
+    if (roomId) { // if check because when user leaves the room, roomId becomes null and we don't want to emit code-change event to backend when user leaves the room
       socket.emit("code-change", {
         roomId,
         code: newCode,
@@ -62,16 +65,18 @@ function EditorPage() {
   const handleCursorPositionChanged = (cursorData) => {
     console.log("[cursor][frontend] received cursor-position-changed", cursorData);
 
-    setRemoteCursors((prev) => ({ 
+    setRemoteCursors((prev) => ({
       ...prev,
       [cursorData.socketId]: cursorData,
     }));
   };
 
-  useEffect(() => {
+  useEffect(() => {  // Listen for changes in the remoteCursors state and log the updated state to the console for debugging purposes
     console.log("[cursor][frontend] remoteCursors state updated", remoteCursors);
-  }, [remoteCursors]);
+  }, [remoteCursors]);  // depedency array contains remoteCursors, so that whenever remoteCursors state changes, this useEffect will run and log the updated state to the console
 
+
+ 
   useEffect(() => {      // My actions trigger normal event handlers WHILE Other users' actions are handled by socket listeners inside useEffect
     const savedRoomData = localStorage.getItem("roomData");
 
@@ -90,7 +95,7 @@ function EditorPage() {
       if (!socket.connected) {
         socket.connect();
       }
-      socket.emit("join-room", { username, roomId });     // rejoin the room after refresh
+      socket.emit("join-room", { username, roomId });   // rejoin the room after refresh
     }
 
     const handleReceiveCode = (newCode) => {
