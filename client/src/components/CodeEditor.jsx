@@ -1,7 +1,5 @@
 import { useEffect, useRef } from "react";
-
-import Editor from "@monaco-editor/react";
-
+import Editor from "@monaco-editor/react";    
 import { socket } from "../socket";
 
 function CodeEditor({
@@ -53,8 +51,6 @@ function CodeEditor({
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    console.log("[cursor][frontend] Monaco editor mounted");
-
     // Listen for cursor position changes in the editor.
     cursorListenerRef.current = editor.onDidChangeCursorPosition(
       (event) => {
@@ -85,7 +81,7 @@ function CodeEditor({
     }
 
     // Convert each remote cursor into a Monaco decoration.
-    const decorations = Object.values(remoteCursors)
+    const decorations = Object.values(remoteCursors)   
       .filter(
         (cursor) =>
           Number.isInteger(cursor.lineNumber) &&
@@ -113,24 +109,14 @@ function CodeEditor({
         },
       }));
 
-    console.log("[cursor][frontend] applying remote cursor decorations", {
-      remoteCursors,
-      previousDecorationIds: decorationsRef.current,
-      nextDecorations: decorations,
-    });
-
     // Replace the previous decorations with the new
     // remote cursor decorations.
     decorationsRef.current = editorRef.current.deltaDecorations(
       decorationsRef.current,
       decorations
     );
-
-    console.log(
-      "[cursor][frontend] decoration ids after deltaDecorations",
-      decorationsRef.current
-    );
-  }, [remoteCursors]);
+    
+  }, [remoteCursors]);   
 
   // Cleanup function that runs when the component unmounts.
   // Dispose of the cursor listener and remove the remaining
@@ -188,7 +174,7 @@ function CodeEditor({
 
           // Call handleEditorDidMount when Monaco is mounted
           // to store references and set up the cursor listener.
-          onMount={handleEditorDidMount}
+          onMount={handleEditorDidMount}    
 
           options={{
             minimap: { enabled: false },

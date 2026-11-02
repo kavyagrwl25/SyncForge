@@ -32,7 +32,7 @@ function EditorPage() {
     setCode("");
     setNotifications([]);
     setRemoteCursors({});
-    socket.disconnect();
+    socket.disconnect();  // que: what if it fails? ans: 
     console.log("Left room");
     navigate("/"); // navigate back to home page after leaving the room
   };
@@ -64,20 +64,14 @@ function EditorPage() {
     }
   };
 
-  const handleCursorPositionChanged = (cursorData) => {
-    console.log("[cursor][frontend] received cursor-position-changed", cursorData);
+  const handleCursorPositionChanged = (cursorData) => { // cursorData is an object containing payload(socketId, userName, lineNumber, column) of user who moved their cursor (backend sent this data to frontend after receiving cursor-position-change event from that user(frontend)))
+    console.log("[cursor][frontend] received cursor-position-changed", cursorData); 
 
-    setRemoteCursors((prev) => ({
+    setRemoteCursors((prev) => ({   // prev stores the previous state of all remoteCursors in that room
       ...prev,
-      [cursorData.socketId]: cursorData,
+      [cursorData.socketId]: cursorData,    // key: socketId, value: cursorData, so that we can easily update the cursor position of a specific user based on their socketId, stored as an object
     }));
   };
-
-  useEffect(() => {  // Listen for changes in the remoteCursors state and log the updated state to the console for debugging purposes
-    console.log("[cursor][frontend] remoteCursors state updated", remoteCursors);
-  }, [remoteCursors]);  // depedency array contains remoteCursors, so that whenever remoteCursors state changes, this useEffect will run and log the updated state to the console
-
-
  
   useEffect(() => {      // My actions trigger normal event handlers WHILE Other users' actions are handled by socket listeners inside useEffect
     const savedRoomData = localStorage.getItem("roomData");
@@ -120,8 +114,6 @@ function EditorPage() {
       // usersList is coming from backend whenever there is a change
       // in active users in room, this function will update the users
       // state with that usersList
-
-      console.log("[cursor][frontend] room-users update", usersList);
       setUsers(usersList);
       setRemoteCursors((prev) =>
         Object.fromEntries(

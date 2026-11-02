@@ -1,6 +1,7 @@
-import { io } from "socket.io-client";    // io is a function that creates a new socket connection to the server, allowing the client to communicate with the server in real-time using WebSockets.
 
-export const socket = io("http://localhost:4000", {
+import { io } from "socket.io-client";
+
+export const socket = io("http://localhost:4000", {     // Create a Socket.IO client instance that connects to the server at "http://localhost:4000". This is the address of the backend server where the Socket.IO server is running. The client will use this connection to send and receive real-time events.
   autoConnect: false,
 });
 

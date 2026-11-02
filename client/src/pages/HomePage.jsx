@@ -32,7 +32,6 @@ function HomePage() {
 
   useEffect(() => {         // after handleJoinRoom is called, the backend will listen to socket.io event ("join-room") using (socket.on()) and then emit a ("room-joined") event to the frontend with the roomId, which will be handled here to navigate to the editor page with the roomId as a parameter in the URL
     const handleRoomJoined = ({ roomId }) => {
-      console.log("Joined room:", { roomId });
       navigate(`/editor/${roomId}`); // navigate to the editor page with the roomId as a parameter in the URL using react-router-dom's useNavigate hook
     };
 
