@@ -2,55 +2,59 @@ import Header from "../components/Header";
 import ActiveUsers from "../components/ActiveUsers";
 import CodeEditor from "../components/CodeEditor";
 import Notifications from "../components/Notifications";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { socket } from "../socket";
 import { useNavigate, useParams } from "react-router-dom";
+import * as Y from "yjs";
+import { createRoomSync } from "../collaboration/roomSync";
 
-function EditorPage() {
+function RoomEditor({ roomId }) {
+  // One document for this room session, retained through rerenders and reconnects.
+  const [ydoc] = useState(() => new Y.Doc());
+  const ytext = ydoc.getText("code");
+  const documentMountedRef = useRef(false);
 
   const navigate = useNavigate();
-  const [username, setUsername] = useState("");  // get it from localstorage, because when user refreshes the page, we need to restore the username from localstorage
-  const [code, setCode] = useState("");
-  const [language, setLanguage] = useState("javascript");
+  const [username] = useState(() => {
+    try {
+      const savedRoom = JSON.parse(localStorage.getItem("roomData"));
+      return savedRoom?.roomId === roomId && typeof savedRoom.username === "string"
+        ? savedRoom.username
+        : "";
+    } catch {
+      return "";
+    }
+  });
+  const [language, setLanguage] = useState(
+    () => localStorage.getItem(`syncforge-language-${roomId}`) || "javascript"
+  );
   const [users, setUsers] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState(
     socket.connected ? "Connected" : "Disconnected"
   );
   const [remoteCursors, setRemoteCursors] = useState({});   
-  const {roomId} = useParams();   // this is initial implementation, because we must validate the roomID at backend when user clicks join room at homePage
+
+  useEffect(() => {
+    documentMountedRef.current = true;
+    return () => {
+      documentMountedRef.current = false;
+      // Strict Mode immediately sets the same session up again. On a real unmount,
+      // wait until MonacoBinding has cleaned up before destroying the document.
+      queueMicrotask(() => {
+        if (!documentMountedRef.current) ydoc.destroy();
+      });
+    };
+  }, [ydoc]);
 
   const handleLeaveRoom = () => {
     if (socket.connected) {
       socket.emit("leave-room");
     }
     localStorage.removeItem("roomData");
-    localStorage.removeItem(`syncforge-code-${roomId}`);
     localStorage.removeItem(`syncforge-language-${roomId}`);
-    setUsers([]);
-    setUsername("");
-    setCode("");
-    setNotifications([]);
-    setRemoteCursors({});
-    socket.disconnect();  // que: what if it fails? ans: 
-    console.log("Left room");
-    navigate("/"); // navigate back to home page after leaving the room
-  };
-
-  const handleCodeChange = (newCode) => {
-    setCode(newCode);
-
-    localStorage.setItem( // store the latest code in local storage so that refresh restores latest collaborative code
-      `syncforge-code-${roomId}`,
-      newCode
-    );
-
-    if (roomId) { // if check because when user leaves the room, roomId becomes null and we don't want to emit code-change event to backend when user leaves the room
-      socket.emit("code-change", {
-        roomId,
-        code: newCode,
-      });
-    }
+    socket.disconnect();
+    navigate("/");
   };
 
   const handleLanguageChange = (newLanguage) => {
@@ -64,50 +68,17 @@ function EditorPage() {
     }
   };
 
-  const handleCursorPositionChanged = (cursorData) => { // cursorData is an object containing payload(socketId, userName, lineNumber, column) of user who moved their cursor (backend sent this data to frontend after receiving cursor-position-change event from that user(frontend)))
-    console.log("[cursor][frontend] received cursor-position-changed", cursorData); 
-
-    setRemoteCursors((prev) => ({   // prev stores the previous state of all remoteCursors in that room
-      ...prev,
-      [cursorData.socketId]: cursorData,    // key: socketId, value: cursorData, so that we can easily update the cursor position of a specific user based on their socketId, stored as an object
-    }));
-  };
- 
-  useEffect(() => {      // My actions trigger normal event handlers WHILE Other users' actions are handled by socket listeners inside useEffect
-    const savedRoomData = localStorage.getItem("roomData");
-
-    if (savedRoomData) {
-      const { username } = JSON.parse(savedRoomData);
-      setUsername(username);
-      // restore room specific language and code from local storage after refresh
-      const savedLanguage = localStorage.getItem(`syncforge-language-${roomId}`);
-      const savedCode = localStorage.getItem(`syncforge-code-${roomId}`);
-      if (savedCode) {
-        setCode(savedCode);
-      }
-      if (savedLanguage) {
-        setLanguage(savedLanguage);
-      }
-      if (!socket.connected) {
-        socket.connect();
-      }
-      socket.emit("join-room", { username, roomId });   // rejoin the room after refresh
+  useEffect(() => {
+    if (!username.trim()) {
+      navigate("/");
+      return;
     }
 
-    const handleReceiveCode = (newCode) => {
-      setCode(newCode);
-
-      // update the latest received code in local storage
-      // so that refresh restores latest collaborative code
-
-      const currentRoomData = JSON.parse(localStorage.getItem("roomData"));
-
-      if (currentRoomData?.roomId) {
-        localStorage.setItem(
-          `syncforge-code-${currentRoomData.roomId}`,
-          newCode
-        );
-      }
+    const handleCursorPositionChanged = (cursorData) => {
+      setRemoteCursors((prev) => ({
+        ...prev,
+        [cursorData.socketId]: cursorData,
+      }));
     };
 
     const handleRoomUsers = (usersList) => {
@@ -129,14 +100,7 @@ function EditorPage() {
 
       // update latest received language in local storage
 
-      const currentRoomData = JSON.parse(localStorage.getItem("roomData"));
-
-      if (currentRoomData?.roomId) {
-        localStorage.setItem(
-          `syncforge-language-${currentRoomData.roomId}`,
-          newLanguage
-        );
-      }
+      localStorage.setItem(`syncforge-language-${roomId}`, newLanguage);
     };
 
     const handleRoomNotifications = (notificationsList) => {
@@ -149,38 +113,34 @@ function EditorPage() {
 
     
 
-    
-    socket.on("receive-code", handleReceiveCode);   // whenever receive-code is emitted, run handleReceiveCode function
     socket.on("room-notifications", handleRoomNotifications);
     socket.on("room-notification", handleRoomNotification);
     socket.on("room-users", handleRoomUsers);
     socket.on("receive-language", handleReceiveLanguage);
     socket.on("cursor-position-changed", handleCursorPositionChanged);
-    socket.on("connect", () => {
-      setConnectionStatus("Connected");
-    });
-    socket.on("disconnect", () => {
-      setConnectionStatus("Disconnected");
-    });
-    socket.io.on("reconnect_attempt", () => {
-      console.log("[socket][frontend] reconnect_attempt");
-      setConnectionStatus("Reconnecting...");
+    const stopSync = createRoomSync({
+      socket,
+      ydoc,
+      roomId,
+      username,
+      onStatus: setConnectionStatus,
+      onError: (error) => console.error("Yjs synchronization failed:", error),
     });
 
     return () => {
       // to prevent memory leaks, we need to clean up the event listeners
       // when the component unmounts or when dependencies change
+      stopSync();
       socket.off("room-notifications", handleRoomNotifications);
       socket.off("room-notification", handleRoomNotification);
-      socket.off("receive-code", handleReceiveCode);
       socket.off("room-users", handleRoomUsers);
       socket.off("receive-language", handleReceiveLanguage);
       socket.off("cursor-position-changed", handleCursorPositionChanged);
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.io.off("reconnect_attempt");
+      // Navigation away also removes this participant. Offline text remains in
+      // ydoc during a temporary network disconnect while this page stays mounted.
+      socket.disconnect();
     };
-  }, [roomId]);
+  }, [roomId, username, ydoc, navigate]);
 
 
   return (
@@ -195,15 +155,14 @@ function EditorPage() {
         <ActiveUsers users={users} />
 
         <CodeEditor
+          ytext={ytext}
           roomId={roomId}
           connectionStatus={connectionStatus}
           users={users}
-          code={code}
           language={language}
           username={username}
           remoteCursors={remoteCursors}
           notifications={notifications}
-          handleCodeChange={handleCodeChange}
           handleLanguageChange={handleLanguageChange}
         />
 
@@ -211,6 +170,12 @@ function EditorPage() {
       </div>
     </>
   );
+}
+
+function EditorPage() {
+  const { roomId } = useParams();
+  // React Router can reuse a page when its params change; rooms must not share a doc.
+  return <RoomEditor key={roomId} roomId={roomId} />;
 }
 
 export default EditorPage;

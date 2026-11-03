@@ -1,14 +1,15 @@
+import * as Y from "yjs";
+import {
+  getRoomDoc,
+  deleteRoomDoc,
+  destroyRoomDocs,
+} from "./roomManager/roomYDoc.js";
 import { Server } from "socket.io";
 import {
   getUsersInRoom,
   addUserToRoom,
   removeUserFromRoom,
 } from "./roomManager/roomUsers.js";
-import {
-  getRoomCode,
-  setRoomCode,
-  deleteRoomCode,
-} from "./roomManager/roomCode.js";
 import {
   getRoomLanguage,
   setRoomLanguage,
@@ -26,14 +27,38 @@ const userMap = new Map();
 const disconnectTimers = new Map();
 const roomCleanupTimers = new Map();
 
+// Socket.IO can deliver binary data as a Buffer, typed array, or ArrayBuffer.
+const toUint8Array = (data) => {
+  if (data instanceof Uint8Array) return data;
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  if (ArrayBuffer.isView(data)) {
+    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  }
+  throw new TypeError("Expected a binary Yjs update");
+};
+
+const reply = (acknowledge, result) => {
+  if (typeof acknowledge === "function") acknowledge(result);
+};
+
+// Socket.IO also uses each socket ID as a private room name.
+const getSocketRoom = (roomId) => `room:${roomId}`;
+
+const isRoomMember = (socket, roomId) => {
+  return userMap.get(socket.id)?.roomId === roomId && socket.rooms.has(getSocketRoom(roomId));
+};
+
 const scheduleRoomCleanup = (roomId) => {
   if (roomCleanupTimers.has(roomId)) {
     clearTimeout(roomCleanupTimers.get(roomId));
   }
 
   const timer = setTimeout(() => {
+    // A rejoin or a newer timer may have replaced this cleanup request.
+    if (roomCleanupTimers.get(roomId) !== timer) return;
+
     if (getUsersInRoom(roomId).length === 0) {
-      deleteRoomCode(roomId);
+      deleteRoomDoc(roomId);
       deleteRoomLanguage(roomId);
       deleteRoomNotifications(roomId);
     }
@@ -53,14 +78,55 @@ export const initSocket = (server) => {
     },
   });
 
-  io.on("connection", (socket) => {
-    // on fresh connection, send code, language if already present in the room
-    socket.on("join-room", ({ username, roomId }) => {
-      //destructured username and roomId from roomData that frontend sent
-      const reconnectKey = `${roomId}:${username}`; // Create a unique key for the user based on their username and room ID to track reconnections. This key will be used to check if the user is reconnecting after a disconnect, allowing us to restore their session without treating it as a new join.
-      const isReconnect = disconnectTimers.has(reconnectKey);
+  server.once("close", () => {
+    const roomIds = new Set(roomCleanupTimers.keys());
+    for (const [socketId, user] of userMap) {
+      roomIds.add(user.roomId);
+      removeUserFromRoom(user.roomId, socketId);
+    }
+    for (const timer of roomCleanupTimers.values()) clearTimeout(timer);
+    for (const timer of disconnectTimers.values()) clearTimeout(timer);
+    roomCleanupTimers.clear();
+    disconnectTimers.clear();
+    userMap.clear();
+    for (const roomId of roomIds) {
+      deleteRoomLanguage(roomId);
+      deleteRoomNotifications(roomId);
+    }
+    destroyRoomDocs();
+  });
 
-      // Check if the user is already in the room to prevent duplicate joins. This is done by checking if any user in the room has the same username as the one trying to join.
+  io.on("connection", (socket) => {
+    socket.on("join-room", (payload, acknowledge) => {
+      const { username, roomId, stateVector } = payload ?? {};
+      if (
+        typeof username !== "string" || !username.trim() || username.length > 256 ||
+        typeof roomId !== "string" || !roomId.trim() || roomId.length > 256 ||
+        Object.hasOwn(Object.prototype, roomId)
+      ) {
+        reply(acknowledge, { ok: false, error: "A valid username and room ID are required" });
+        return;
+      }
+
+      const currentUser = userMap.get(socket.id);
+      if (currentUser && (currentUser.roomId !== roomId || currentUser.username !== username)) {
+        reply(acknowledge, { ok: false, error: "Leave the current room before joining another" });
+        return;
+      }
+
+      let clientStateVector;
+      try {
+        if (stateVector !== undefined) {
+          clientStateVector = toUint8Array(stateVector);
+          Y.decodeStateVector(clientStateVector);
+        }
+      } catch {
+        reply(acknowledge, { ok: false, error: "Invalid Yjs state vector" });
+        return;
+      }
+
+      const reconnectKey = JSON.stringify([roomId, username]);
+      const isReconnect = disconnectTimers.has(reconnectKey);
       const alreadyInRoom = getUsersInRoom(roomId).some(
         (user) => user.username === username
       );
@@ -75,10 +141,10 @@ export const initSocket = (server) => {
         disconnectTimers.delete(reconnectKey);
       }
 
-      socket.join(roomId);
-      userMap.set(socket.id, { username, roomId }); // Store the username and room ID in a map using the socket ID as the key for easy retrieval later
-      addUserToRoom(roomId, username, socket.id); // in-memory store update to add this user to this room
-      io.to(roomId).emit("room-users", getUsersInRoom(roomId)); // Emit the updated list of users in the room to all clients in that room
+      socket.join(getSocketRoom(roomId));
+      userMap.set(socket.id, { username, roomId });
+      addUserToRoom(roomId, username, socket.id);
+      io.to(getSocketRoom(roomId)).emit("room-users", getUsersInRoom(roomId)); // Emit the updated list of users in the room to all clients in that room
       socket.emit("room-notifications", getRoomNotifications(roomId));
       if (!alreadyInRoom && !isReconnect) {
         const notification = createRoomNotification(
@@ -86,42 +152,75 @@ export const initSocket = (server) => {
           "join",
         );
         addRoomNotification(roomId, notification);
-        socket.to(roomId).emit("room-notification", notification);
+        socket.to(getSocketRoom(roomId)).emit("room-notification", notification);
       }
-      socket.to(roomId).emit("user-joined", {
-        username,
-        message: `${username} joined the room`,
+      if (!currentUser) {
+        socket.to(getSocketRoom(roomId)).emit("user-joined", {
+          username,
+          message: `${username} joined the room`,
+        });
+      }
+
+      const ydoc = getRoomDoc(roomId);
+      // The client applies this diff, then sends its missing edits back using
+      // this server state vector. Neither side replaces its existing Y.Doc.
+      socket.emit("yjs-init", {
+        roomId,
+        update: Y.encodeStateAsUpdate(ydoc, clientStateVector),
+        stateVector: Y.encodeStateVector(ydoc),
       });
-      socket.emit("receive-code", getRoomCode(roomId) || ""); // this is for the user who just joined, we want to send them the latest code in the room so that their editor can be in sync with everyone else's. If there's no code in the room yet, we send an empty string.
+
       socket.emit("receive-language", getRoomLanguage(roomId) || "javascript");
       socket.emit("room-joined", {
         roomId,
         username,
       });
+      reply(acknowledge, { ok: true });
     });
 
-    socket.on("code-change", ({ roomId, code }) => {
-      // this is for when a user makes change in editor, other roommates gets the new code
-      setRoomCode(roomId, code);
-      socket.to(roomId).emit("receive-code", code);
+    socket.on("yjs-update", (payload, acknowledge) => {
+      const { roomId, update } = payload ?? {};
+      if (!isRoomMember(socket, roomId)) {
+        reply(acknowledge, { ok: false, error: "You must join this room before sending updates" });
+        return;
+      }
+
+      try {
+        const binaryUpdate = toUint8Array(update);
+        // Parsing first prevents malformed updates from partly changing the
+        // live document before applyUpdate throws.
+        Y.decodeUpdate(binaryUpdate);
+        Y.applyUpdate(getRoomDoc(roomId), binaryUpdate, socket.id);
+        socket.to(getSocketRoom(roomId)).emit("yjs-update", { roomId, update: binaryUpdate });
+        reply(acknowledge, { ok: true });
+      } catch {
+        reply(acknowledge, { ok: false, error: "Invalid Yjs update" });
+      }
     });
-    socket.on("language-change", ({ roomId, language }) => {
+    socket.on("language-change", (payload) => {
+      const { roomId, language } = payload ?? {};
+      if (!isRoomMember(socket, roomId) || !["javascript", "python", "cpp", "java"].includes(language)) return;
       setRoomLanguage(roomId, language);
-      socket.to(roomId).emit("receive-language", language);
+      socket.to(getSocketRoom(roomId)).emit("receive-language", language);
     });
     socket.on(
       "cursor-position-change",
-      ({ roomId, username, lineNumber, column }) => {
-        if (!roomId || !username || !lineNumber || !column) return;
+      (data) => {
+        const { roomId, lineNumber, column } = data ?? {};
+        if (
+          !isRoomMember(socket, roomId) ||
+          !Number.isInteger(lineNumber) || lineNumber < 1 ||
+          !Number.isInteger(column) || column < 1
+        ) return;
 
         const payload = {
           socketId: socket.id,
-          username,
+          username: userMap.get(socket.id).username,
           lineNumber,
           column,
         };
 
-        socket.to(roomId).emit("cursor-position-changed", {
+        socket.to(getSocketRoom(roomId)).emit("cursor-position-changed", {
           ...payload,
         });
       },
@@ -136,18 +235,18 @@ export const initSocket = (server) => {
         "leave",
       );
       addRoomNotification(roomId, notification);
-      socket.to(roomId).emit("room-notification", notification);
+      socket.to(getSocketRoom(roomId)).emit("room-notification", notification);
       removeUserFromRoom(roomId, socket.id);
       if (getUsersInRoom(roomId).length === 0) {
         scheduleRoomCleanup(roomId);
       }
-      socket.to(roomId).emit("user-left", {
+      socket.to(getSocketRoom(roomId)).emit("user-left", {
         username,
         message: `${username} left the room`,
       });
-      socket.leave(roomId);
+      socket.leave(getSocketRoom(roomId));
       userMap.delete(socket.id);
-      io.to(roomId).emit("room-users", getUsersInRoom(roomId));
+      io.to(getSocketRoom(roomId)).emit("room-users", getUsersInRoom(roomId));
       socket.disconnect(); // Disconnect the socket after leaving the room
     });
 
@@ -160,9 +259,9 @@ export const initSocket = (server) => {
       }
 
       const { username, roomId } = user;
-      const reconnectKey = `${roomId}:${username}`;
+      const reconnectKey = JSON.stringify([roomId, username]);
 
-      socket.to(roomId).emit("user-left", {
+      socket.to(getSocketRoom(roomId)).emit("user-left", {
         username,
         message: `${username} disconnected`,
       });
@@ -172,8 +271,11 @@ export const initSocket = (server) => {
       if (getUsersInRoom(roomId).length === 0) {
         scheduleRoomCleanup(roomId);
       }
-      io.to(roomId).emit("room-users", getUsersInRoom(roomId));
+      io.to(getSocketRoom(roomId)).emit("room-users", getUsersInRoom(roomId));
+      // Repeated disconnects for the same identity replace their grace timer.
+      clearTimeout(disconnectTimers.get(reconnectKey));
       const disconnectTimer = setTimeout(() => {
+        if (disconnectTimers.get(reconnectKey) !== disconnectTimer) return;
         disconnectTimers.delete(reconnectKey);
 
         const usersInRoom = getUsersInRoom(roomId);
@@ -190,7 +292,7 @@ export const initSocket = (server) => {
           "disconnect",
         );
         addRoomNotification(roomId, notification);
-        io.to(roomId).emit("room-notification", notification);
+        io.to(getSocketRoom(roomId)).emit("room-notification", notification);
       }, 3000);
 
       disconnectTimers.set(reconnectKey, disconnectTimer);

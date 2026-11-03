@@ -1,30 +1,21 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";    
 import { socket } from "../socket";
+import { MonacoBinding } from "y-monaco";
 
 function CodeEditor({
-  code,
   language,
   roomId,
   username,
   remoteCursors,
-  handleCodeChange,
   handleLanguageChange,
+  ytext,
 }) {
-  // Store a reference to the Monaco editor instance.
-  // useRef persists this reference across re-renders.
-  const editorRef = useRef(null);
+  // State makes the effects run after Monaco finishes mounting.
+  const [editor, setEditor] = useState(null);
 
   // Store a reference to the Monaco instance.
   const monacoRef = useRef(null);
-
-  // Store the current remote cursor decorations so they can
-  // be replaced when remote cursor positions change.
-  const decorationsRef = useRef([]);
-
-  // Store the cursor listener so it can be disposed when
-  // the component is unmounted.
-  const cursorListenerRef = useRef(null);
 
   // Keep the latest roomId available inside event listeners
   // without recreating those listeners whenever roomId changes.
@@ -44,15 +35,43 @@ function CodeEditor({
     usernameRef.current = username;
   }, [username]);
 
-  // Called once when Monaco finishes mounting.
-  // Stores the editor/Monaco references and sets up the
-  // listener for the current user's cursor position.
+  // Binding and listeners are managed by effects so cleanup and
+  // setup also work when React Strict Mode replays effects.
   const handleEditorDidMount = (editor, monaco) => {
-    editorRef.current = editor;
     monacoRef.current = monaco;
+    setEditor(editor);
+  };
+
+  useEffect(() => {
+    if (!editor || !ytext) return;
+
+    let model = null;
+    let binding = null;
+
+    const bindModel = () => {
+      // y-monaco already destroys its binding if the model is disposed.
+      if (model && !model.isDisposed()) binding?.destroy();
+
+      model = editor.getModel();
+      binding = model && !model.isDisposed()
+        ? new MonacoBinding(ytext, model, new Set([editor]))
+        : null;
+    };
+
+    bindModel();
+    const modelListener = editor.onDidChangeModel(bindModel);
+
+    return () => {
+      modelListener.dispose();
+      if (model && !model.isDisposed()) binding?.destroy();
+    };
+  }, [editor, ytext]);
+
+  useEffect(() => {
+    if (!editor) return;
 
     // Listen for cursor position changes in the editor.
-    cursorListenerRef.current = editor.onDidChangeCursorPosition(
+    const cursorListener = editor.onDidChangeCursorPosition(
       (event) => {
         // Do not send cursor information if the user or room
         // information is not available yet.
@@ -71,12 +90,14 @@ function CodeEditor({
         socket.emit("cursor-position-change", payload);
       }
     );
-  };
+
+    return () => cursorListener.dispose();
+  }, [editor]);
 
   // Listen for changes in remoteCursors and update the
   // corresponding cursor decorations inside Monaco.
   useEffect(() => {
-    if (!editorRef.current || !monacoRef.current || !remoteCursors) {
+    if (!editor || !monacoRef.current || !remoteCursors) {
       return;
     }
 
@@ -109,32 +130,32 @@ function CodeEditor({
         },
       }));
 
-    // Replace the previous decorations with the new
-    // remote cursor decorations.
-    decorationsRef.current = editorRef.current.deltaDecorations(
-      decorationsRef.current,
-      decorations
-    );
-    
-  }, [remoteCursors]);   
+    let model = null;
+    let decorationIds = [];
 
-  // Cleanup function that runs when the component unmounts.
-  // Dispose of the cursor listener and remove the remaining
-  // remote cursor decorations.
-  useEffect(() => {
-    return () => {
-      if (cursorListenerRef.current) {
-        cursorListenerRef.current.dispose();
+    const clearDecorations = () => {
+      if (model && !model.isDisposed()) {
+        model.deltaDecorations(decorationIds, []);
       }
+      decorationIds = [];
+    };
 
-      if (editorRef.current) {
-        editorRef.current.deltaDecorations(
-          decorationsRef.current,
-          []
-        );
+    const updateDecorations = () => {
+      clearDecorations();
+      model = editor.getModel();
+      if (model && !model.isDisposed()) {
+        decorationIds = editor.deltaDecorations([], decorations);
       }
     };
-  }, []);
+
+    updateDecorations();
+    const modelListener = editor.onDidChangeModel(updateDecorations);
+
+    return () => {
+      modelListener.dispose();
+      clearDecorations();
+    };
+  }, [editor, remoteCursors]);
 
   return (
     <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
@@ -166,12 +187,6 @@ function CodeEditor({
           height="500px"
           language={language}
           theme="vs-dark"
-          value={code} // Set the initial value of the editor to the code prop
-
-          // Monaco's onChange gives us the complete current
-          // editor content. This is the full-document sync flow.
-          onChange={(value) => handleCodeChange(value || "")}
-
           // Call handleEditorDidMount when Monaco is mounted
           // to store references and set up the cursor listener.
           onMount={handleEditorDidMount}    
