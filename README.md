@@ -1,417 +1,569 @@
+
 # 🚀 SyncForge
 
-SyncForge is a **real-time collaborative code editor** that enables multiple developers to write, edit, and collaborate on code simultaneously inside isolated collaborative workspaces (rooms).
+### Real-Time Collaborative Code Editor Powered by Yjs CRDTs and Socket.IO
 
-Built using **React.js, Node.js, Express.js, Monaco Editor, and Socket.IO**, SyncForge is designed around an **event-driven architecture** to provide low-latency synchronization, efficient state management, and scalable real-time communication.
+SyncForge is a real-time collaborative code editor that enables multiple developers to write, edit, and collaborate on the same code document simultaneously within shared coding rooms.
 
-The project is currently optimized for real-time collaboration while being architected for future horizontal scaling using **Redis**, **PostgreSQL**, and containerized deployment.
+Built using **React.js, Node.js, Express.js, Monaco Editor, Socket.IO, and Yjs**, SyncForge uses **Conflict-Free Replicated Data Types (CRDTs)** to support concurrent editing without overwriting other users' changes.
 
----
+The project focuses on real-time communication, concurrent state synchronization, room-based collaboration, and connection recovery.
 
-# ✨ Features
-
-## 👥 Real-Time Collaboration
-
-- Multi-user collaborative code editing
-- Room-based collaboration
-- Low-latency code synchronization using WebSockets
-- Real-time programming language synchronization
-- Live active users tracking
-- Automatic room rejoin after browser refresh
-- Connection status monitoring & automatic reconnection
+**GitHub Repository:** [SyncForge](https://github.com/kavyagrwl25/SyncForge)
 
 ---
 
-## 🧠 Editor Experience
+## ✨ Features
 
-- Monaco Editor (VS Code Editor)
-- Multi-language syntax highlighting
-- Live remote cursor synchronization
-- Cursor rendering using Monaco `deltaDecorations`
-- Responsive editor layout
-- Real-time collaborative editing
+### 👥 Real-Time Collaborative Editing
+
+- Multiple users can edit the same code document simultaneously.
+- Yjs CRDTs support convergence of concurrent edits.
+- Incremental binary synchronization instead of full-document transmission.
+- Independent collaborative rooms identified by room IDs.
+- Room-scoped communication using Socket.IO.
+- Automatic synchronization for newly joining users.
+
+### 🧠 Code Editor
+
+- Monaco Editor, the editor technology used in VS Code.
+- Syntax highlighting for JavaScript, Python, C++, and Java.
+- Real-time remote cursor visualization.
+- Programming language synchronization across room participants.
+- Responsive editor interface.
+
+### 🔄 Connection and State Management
+
+- Automatic Socket.IO reconnection.
+- Bidirectional synchronization using Yjs state vectors.
+- Recovery of missing updates after temporary disconnections.
+- Browser refresh recovery while the server retains the room document.
+- Active user tracking and connection status monitoring.
+- Room join and activity notifications.
+
+### ⚙️ Backend and Room Management
+
+- Event-driven communication using Socket.IO.
+- One server-side `Y.Doc` per active room.
+- Room membership validation before processing collaborative updates.
+- Isolated document state for different rooms.
+- Cleanup of expired room documents.
+- Automated integration tests covering collaborative synchronization.
 
 ---
 
-## 📡 Event-Driven Communication
+## 🛠️ Tech Stack
 
-- Bidirectional communication using Socket.IO
-- Room-based event broadcasting
-- Automatic socket lifecycle management
-- Proper listener cleanup to prevent memory leaks
-- State synchronization across connected clients
+| Layer | Technology |
+|-------|------------|
+| Frontend | React.js, Vite, Tailwind CSS |
+| Code Editor | Monaco Editor |
+| Collaboration Engine | Yjs (CRDT) |
+| Monaco Integration | y-monaco |
+| Real-Time Communication | Socket.IO |
+| Backend | Node.js, Express.js |
+| Document State | In-memory Y.Doc per active room |
+| Testing | Node.js, Socket.IO and Yjs integration tests |
 
 ---
 
-# 🏗️ System Architecture
+## 🏗️ System Architecture
 
-```text
-                React Client
-                     │
-             Socket.IO Client
-                     │
-────────────────────────────────────
-            Socket.IO Server
-────────────────────────────────────
-        │                      │
- Room Manager          Event Dispatcher
-        │                      │
- Active Room State     Event Broadcasting
-        │
- In-Memory Room Store
-        │
-   (Future → Redis)
+SyncForge follows an event-driven client-server architecture in which each client maintains an independent Yjs document, while the server maintains a synchronized document for each active room.
+
+```mermaid
+flowchart TD
+    A["User A - Monaco Editor"]
+    B["User A - y-monaco"]
+    C["Client A - Y.Doc / Y.Text"]
+
+    D["Socket.IO Server"]
+    E["Server - Room Y.Doc"]
+
+    F["Client B - Y.Doc / Y.Text"]
+    G["User B - y-monaco"]
+    H["User B - Monaco Editor"]
+
+    A <--> B
+    B <--> C
+    C <-->|"Yjs Binary Updates"| D
+    D <--> E
+    D <-->|"Yjs Binary Updates"| F
+    F <--> G
+    G <--> H
 ```
 
+### Core Components
+
+**Monaco Editor**
+
+Provides the code editing interface, syntax highlighting, and cursor management.
+
+**Yjs**
+
+Manages collaborative documents using CRDTs, allowing concurrent changes to converge consistently across clients.
+
+**y-monaco**
+
+Connects Monaco's text model with Yjs `Y.Text`, keeping editor content synchronized with the local collaborative document.
+
+**Socket.IO**
+
+Transports Yjs updates and handles room-based real-time communication.
+
+**Server-side Y.Doc**
+
+Maintains the synchronized document state for each active collaborative room and supports initial synchronization and reconnection.
+
 ---
 
-# 🛠️ Tech Stack
+## ⚡ How SyncForge Works
 
-## Frontend
+### 1. Real-Time Collaborative Editing
 
-- React.js
-- Tailwind CSS
-- Monaco Editor
-- Socket.IO Client
+When a user modifies code, Yjs generates an incremental update that is transmitted through Socket.IO.
 
-## Backend
+```text
+User A edits code
+       |
+       v
+Monaco Editor
+       |
+       v
+y-monaco updates Y.Text
+       |
+       v
+Client Y.Doc generates update
+       |
+       v
+Socket.IO sends binary update
+       |
+       v
+Server applies update to room Y.Doc
+       |
+       v
+Server broadcasts update to room participants
+       |
+       v
+User B applies update to local Y.Doc
+       |
+       v
+y-monaco updates Monaco
+       |
+       v
+User B sees the changes
+```
+
+Unlike full-document synchronization, this approach integrates document changes instead of replacing the entire code string.
+
+Yjs manages CRDT convergence, while Socket.IO is responsible for transporting updates.
+
+### 2. Concurrent Editing with CRDTs
+
+Traditional full-document synchronization can cause lost updates when multiple users edit simultaneously.
+
+For example:
+
+- User A inserts text at one position.
+- User B inserts text at another position.
+- Both generate Yjs updates independently.
+- The server receives and broadcasts the updates.
+- Every Yjs replica integrates the received changes.
+
+Because Yjs uses CRDTs, replicas receiving the same updates eventually converge to the same document state, regardless of update arrival order.
+
+The application integrates the Yjs library rather than implementing a CRDT algorithm from scratch.
+
+### 3. Initial Document Synchronization
+
+When a new user joins an existing room:
+
+```text
+New user joins room
+       |
+       v
+Client sends join request
+       |
+       v
+Server identifies room Y.Doc
+       |
+       v
+Exchange Yjs state vectors
+       |
+       v
+Determine missing document updates
+       |
+       v
+Exchange and apply missing updates
+       |
+       v
+Client Y.Text becomes synchronized
+       |
+       v
+Monaco displays shared code
+```
+
+A **Yjs state vector** represents which document updates a replica already knows.
+
+This allows the client and server to exchange missing changes instead of blindly replacing the document state.
+
+### 4. Disconnection and Reconnection
+
+SyncForge supports state reconciliation after temporary network interruptions.
+
+```text
+User disconnects
+       |
+       v
+Local Y.Doc retains edits
+       |
+       v
+Other users continue editing
+       |
+       v
+User reconnects
+       |
+       v
+Client rejoins room
+       |
+       v
+Client and server exchange state vectors
+       |
+       v
+Missing Yjs updates are synchronized
+       |
+       v
+Documents converge
+```
+
+This supports temporary offline editing while the browser page remains open and retains its Yjs document.
+
+Offline edits are not guaranteed to survive closing or refreshing the browser while disconnected.
+
+### 5. Server-Side Room Management
+
+Each active collaborative room has its own Yjs document.
+
+```text
+Server
+  |
+  |-- Room ABC123
+  |      |
+  |      └── Y.Doc
+  |
+  |-- Room XYZ456
+  |      |
+  |      └── Y.Doc
+  |
+  └── Room DEF789
+         |
+         └── Y.Doc
+```
+
+The server:
+
+- Creates a Yjs document when required.
+- Maintains independent state for each room.
+- Applies valid client updates.
+- Broadcasts updates to other participants.
+- Provides document state to joining and reconnecting users.
+- Removes documents after room expiration.
+
+Room membership is validated before incoming updates are applied.
+
+### 6. Room Cleanup
+
+When the last participant leaves a room:
+
+1. The server starts a short cleanup timer.
+2. If a user rejoins before expiration, cleanup is canceled.
+3. If the room remains empty, the server destroys its Yjs document.
+4. The document is removed from server memory.
+
+This reduces unnecessary memory usage from abandoned rooms.
+
+### 7. Live Cursor Synchronization
+
+Remote cursor positions are communicated through separate Socket.IO events.
+
+```text
+User moves cursor
+       |
+       v
+cursor-position-change
+       |
+       v
+Socket.IO Server
+       |
+       v
+Broadcast to room
+       |
+       v
+Remote clients
+       |
+       v
+Monaco decorations
+       |
+       v
+Remote cursor displayed
+```
+
+Monaco decorations are used to visualize other participants' cursor positions.
+
+The current cursor implementation uses absolute line and column positions, which may drift during concurrent edits that shift document content.
+
+---
+
+## 📁 Project Structure
+
+```text
+SyncForge/
+|
+├── client/
+|   └── src/
+|       ├── collaboration/
+|       |   └── roomSync.js
+|       |
+|       ├── components/
+|       |   ├── CodeEditor.jsx
+|       |   ├── ActiveUsers.jsx
+|       |   ├── Header.jsx
+|       |   └── Notifications.jsx
+|       |
+|       ├── pages/
+|       |   └── EditorPage.jsx
+|       |
+|       └── socket.js
+|
+├── server/
+|   ├── socket/
+|   |   ├── socketHandler.js
+|   |   |
+|   |   └── roomManager/
+|   |       └── roomYDoc.js
+|   |
+|   └── test/
+|       └── yjs-sync.test.js
+|
+└── README.md
+```
+
+### Important Files
+
+| File | Responsibility |
+|------|----------------|
+| `EditorPage.jsx` | Client document lifecycle and room UI |
+| `CodeEditor.jsx` | Monaco Editor and Yjs binding |
+| `roomSync.js` | Client-side updates, initialization, and reconnection |
+| `socketHandler.js` | Server-side events, validation, and broadcasting |
+| `roomYDoc.js` | Server-side Yjs document management |
+| `yjs-sync.test.js` | Collaborative synchronization integration tests |
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
 
 - Node.js
-- Express.js
-- Socket.IO
+- npm
+- Git
 
-## Real-Time Communication
+### 1. Clone the Repository
 
-- WebSockets
-- Event-Driven Architecture
-- Socket.IO Rooms
-- Event Broadcasting
-
-## Future Infrastructure
-
-- Redis
-- PostgreSQL
-- Docker
-- Nginx
-
----
-
-# ⚙️ How SyncForge Works
-
-## 1. Room-Based Collaboration
-
-Each collaborative session is identified by a unique `roomId`.
-
-When a user joins:
-
-```text
-Client
-   │
-join-room
-   │
-Server
-   │
-Socket joins room
-   │
-Broadcast room state
+```bash
+git clone https://github.com/kavyagrwl25/SyncForge.git
+cd SyncForge
 ```
 
-Socket.IO Rooms ensure that synchronization events remain isolated to users inside the same collaborative session.
+### 2. Install Backend Dependencies
 
----
-
-## 2. Real-Time Code Synchronization
-
-Whenever a user edits code:
-
-```text
-Editor Change
-      │
-      ▼
-code-change
-      │
-      ▼
-Socket.IO Server
-      │
-      ▼
-Broadcast to Room
-      │
-      ▼
-receive-code
-      │
-      ▼
-Remote Editors Update
+```bash
+cd server
+npm install
 ```
 
-The current implementation synchronizes the latest editor content across all connected users.
+### 3. Start the Backend
 
-Future versions will support **incremental synchronization** by transmitting only document changes rather than the complete editor content.
-
----
-
-## 3. Live Cursor Synchronization
-
-Every cursor movement generates a lightweight synchronization event.
-
-```text
-Cursor Movement
-       │
-cursor-position-change
-       │
-Server Broadcast
-       │
-Remote Clients
-       │
-deltaDecorations()
+```bash
+npm run dev
 ```
 
-Monaco Editor decorations are used to render remote users' cursors in real time.
+### 4. Install Frontend Dependencies
 
----
+Open another terminal from the project root:
 
-## 4. Active User Management
-
-The backend maintains an in-memory mapping between rooms and connected users.
-
-```text
-roomId
-   │
- ├── socketA
- ├── socketB
- └── socketC
+```bash
+cd client
+npm install
 ```
 
-Whenever users join, leave, or disconnect, the server updates the room state and broadcasts the latest participant list.
+### 5. Start the Frontend
 
----
-
-## 5. Session Persistence
-
-Collaborative session information is stored in `localStorage`.
-
-```text
-username
-roomId
-language
-code
+```bash
+npm run dev
 ```
 
-After a browser refresh, users automatically reconnect and restore their previous collaborative session.
-
----
-
-# ⚡ Performance Optimizations
-
-Current optimizations include:
-
-- Efficient state management using React Hooks
-- Persistent editor references using `useRef`
-- Proper Socket.IO listener cleanup
-- Room-scoped event broadcasting
-- Monaco `deltaDecorations` for efficient cursor updates
-- Automatic reconnection handling
-- Optimized React rendering by avoiding unnecessary re-renders
-
----
-
-# 🚀 Planned Optimizations (Currently Working on it)
-
-## Debounced Code Synchronization
-
-Instead of emitting a socket event on every keystroke:
+Open the local URL displayed by Vite, typically:
 
 ```text
-Typing
-↓↓↓↓↓↓↓↓↓↓↓↓
-
-Current
-Emit every key
-
-Future
-Debounce
-Emit after user pauses typing
+http://localhost:5173
 ```
 
-Benefits:
+Make sure the frontend's Socket.IO server URL and backend CORS configuration match your local environment.
 
-- Reduced network traffic
-- Fewer unnecessary socket events
-- Improved scalability
+### 6. Start Collaborating
+
+1. Open SyncForge.
+2. Create or join a collaborative room.
+3. Share the room ID with another user.
+4. Join the same room from another browser window.
+5. Edit code collaboratively in real time.
 
 ---
 
-## Throttled Cursor Synchronization
+## 🧪 Testing
 
-Cursor movement generates a high frequency of events.
+The Yjs migration includes automated integration tests using actual Socket.IO connections and Yjs documents.
 
-Future implementation:
+### Run Backend Integration Tests
 
-```text
-Current
-120 cursor events/sec
-
-↓
-
-Future
-20 cursor events/sec
+```bash
+cd server
+npm test
 ```
 
-Benefits:
+### Build the Frontend
 
-- Lower bandwidth consumption
-- Reduced server workload
-- Smooth cursor visualization
-
----
-
-## Incremental Synchronization
-
-Instead of synchronizing the complete document:
-
-```text
-Current
-Entire editor content
-
-↓
-
-Future
-Only changed text range
+```bash
+cd client
+npm run build
 ```
 
-Potential future synchronization strategies:
+### Tested Scenarios
 
-- Operational Transformation (OT)
-- Conflict-Free Replicated Data Types (CRDT)
+The migration test suite covers:
 
----
+- Concurrent editing on different lines.
+- Concurrent editing at the same position.
+- Concurrent edits on the same line.
+- Simultaneous insertions and deletions.
+- New users joining active rooms.
+- Temporary network disconnection.
+- Offline edits followed by reconnection.
+- Bidirectional state synchronization.
+- Independent room isolation.
+- Malformed update handling.
+- Room presence and notifications.
+- Programming language synchronization.
+- Repeated joins and reconnections.
+- Room expiration and cleanup.
+- Server shutdown cleanup.
 
-# 🔴 Redis Integration
+**Migration validation:** 16 integration scenarios passed with no reported failures or skips. The frontend production build also passed.
 
-To support horizontal scaling, Redis will be introduced as a distributed in-memory data store.
+Normal browser-refresh recovery was subsequently verified manually.
 
-## Redis will manage
-
-- Active collaborative rooms
-- Connected users
-- Socket mappings
-- Temporary collaborative session state
-- Shared application cache
-
-Instead of:
-
-```text
-roomId
-   │
-Server Memory
-```
-
-Room state becomes:
-
-```text
-roomId
-   │
-Redis
-```
-
-allowing every backend instance to access the same shared room information.
+Additional real-browser concurrency and reconnection tests remain valuable before production deployment.
 
 ---
 
-## Socket.IO Redis Adapter
+## 🧠 Engineering Decisions
 
-When multiple backend servers are deployed:
+### Why Yjs instead of Full-Document Synchronization?
 
-```text
-          Client
-             │
-      ┌──────┴──────┐
-      │             │
-   Server A      Server B
-      │             │
-      └──────┬──────┘
-             │
-      Redis Pub/Sub
-```
+The earlier implementation transmitted the entire code string whenever a user edited the document.
 
-Redis Pub/Sub enables Socket.IO events emitted on one server to automatically propagate to sockets connected to every other server.
+This approach could overwrite concurrent edits.
 
-This allows SyncForge to scale horizontally without breaking real-time synchronization.
+Yjs enables incremental CRDT synchronization and deterministic convergence of concurrent changes.
 
----
+### Why Socket.IO?
 
-# 🗄️ PostgreSQL Integration
+Socket.IO provides event-driven, bidirectional communication with room-based broadcasting and reconnection support.
 
-PostgreSQL will provide persistent storage for:
+It acts as the transport layer for Yjs updates.
 
-- Collaborative rooms
-- Code snapshots
-- User accounts
-- Collaboration history
-- Project metadata
-- Audit logs
+### Why Maintain a Y.Doc on the Server?
 
-Redis will serve as the high-speed cache while PostgreSQL becomes the permanent source of truth.
+The server maintains an up-to-date document replica for each active room.
 
----
+This helps newly joining users obtain existing document state and allows disconnected clients to reconcile missing changes when they reconnect.
 
-# 📈 Scalability Roadmap
+### Why Use y-monaco?
 
-- Redis Pub/Sub
-- Socket.IO Redis Adapter
-- PostgreSQL persistence
-- Docker containerization
-- Nginx reverse proxy
-- Horizontal backend scaling
-- Stateless server architecture
-- Rate limiting
-- Event acknowledgements
-- Monitoring & logging
-- Cloud deployment
+Monaco provides the editor, while Yjs manages collaborative text.
+
+`y-monaco` connects Monaco's text model with `Y.Text`, synchronizing changes in both directions.
+
+### Why Use State Vectors?
+
+State vectors help identify changes missing from a Yjs replica.
+
+They enable efficient synchronization during room joining and reconnection without replacing the entire document.
 
 ---
 
-# 🧠 Engineering Concepts Demonstrated
+## ⚠️ Current Limitations
 
-- Event-driven architecture
-- WebSocket communication
-- Bidirectional client-server synchronization
-- Room-based event isolation
-- Real-time collaborative systems
-- React lifecycle management
-- Socket lifecycle management
-- Event registration & cleanup
-- Efficient rendering using `useRef`
-- Client-side session persistence
-- Low-latency communication
-- Scalable backend architecture
-- State synchronization
-- Connection recovery
+### In-Memory Document Storage
 
----
+SyncForge currently uses a single-server, in-memory document store.
 
-# 📚 Key Learnings
+There is no durable database persistence for collaborative documents.
 
-- Building production-style collaborative applications
-- Designing scalable event-driven systems
-- Real-time synchronization with Socket.IO
-- React state & effect management
-- WebSocket lifecycle management
-- Efficient frontend rendering
-- Debouncing & throttling real-time events
-- Distributed architecture with Redis
-- Persistent storage strategies
-- Preparing applications for horizontal scalability
+If the server loses its state and no client retains a document replica, collaborative code may be lost.
+
+### Offline Browser Refresh
+
+Local edits can be retained during temporary disconnections while the page remains open.
+
+Recovering unsent changes after refreshing or closing the browser while offline is not currently supported.
+
+### Remote Cursor Awareness
+
+Remote cursors use line and column positions rather than CRDT-relative positions.
+
+Cursor decorations may become inaccurate when concurrent edits shift text positions.
+
+### Scope
+
+SyncForge is a collaborative code editor, not a complete cloud IDE.
+
+Integrated code execution, multi-file workspaces, and deployment environments are outside its current scope.
 
 ---
 
-# 🤝 Contributing
+## 🔮 Future Improvements
 
-Contributions, suggestions, and feedback are always welcome.
+Potential enhancements include:
 
-Feel free to fork the repository, open issues, or submit pull requests.
+- Temporary document persistence using Redis with an expiration policy.
+- CRDT-aware cursor and selection tracking.
+- Automated browser end-to-end testing.
+- Improved monitoring and error handling.
+- Multi-server synchronization when scaling requirements justify it.
+- Optional code execution using secure sandboxing.
+
+These are future possibilities, not features of the current implementation.
 
 ---
 
-# 📬 Contact
+## 🤝 Contributing
 
-If you'd like to collaborate, discuss ideas, or provide feedback, feel free to connect!
+Contributions, bug reports, and suggestions are welcome.
+
+If you are modifying collaborative synchronization behavior, please include tests covering concurrency, document consistency, and room isolation.
+
+---
+
+## 👩‍💻 Author
+
+**Kavya Agrawal**
+
+- [GitHub](https://github.com/kavyagrwl25)
+- [LinkedIn](https://www.linkedin.com/in/kavya-agrawal-a097402a1/)
+
+---
+
+**SyncForge — Collaborative coding powered by CRDT-based synchronization.**
