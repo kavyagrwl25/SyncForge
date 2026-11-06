@@ -440,32 +440,6 @@ cd client
 npm run build
 ```
 
-### Tested Scenarios
-
-The migration test suite covers:
-
-- Concurrent editing on different lines.
-- Concurrent editing at the same position.
-- Concurrent edits on the same line.
-- Simultaneous insertions and deletions.
-- New users joining active rooms.
-- Temporary network disconnection.
-- Offline edits followed by reconnection.
-- Bidirectional state synchronization.
-- Independent room isolation.
-- Malformed update handling.
-- Room presence and notifications.
-- Programming language synchronization.
-- Repeated joins and reconnections.
-- Room expiration and cleanup.
-- Server shutdown cleanup.
-
-**Migration validation:** 16 integration scenarios passed with no reported failures or skips. The frontend production build also passed.
-
-Normal browser-refresh recovery was subsequently verified manually.
-
-Additional real-browser concurrency and reconnection tests remain valuable before production deployment.
-
 ---
 
 ## 🧠 Engineering Decisions
