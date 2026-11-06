@@ -422,24 +422,6 @@ Make sure the frontend's Socket.IO server URL and backend CORS configuration mat
 
 ---
 
-## 🧪 Testing
-
-The Yjs migration includes automated integration tests using actual Socket.IO connections and Yjs documents.
-
-### Run Backend Integration Tests
-
-```bash
-cd server
-npm test
-```
-
-### Build the Frontend
-
-```bash
-cd client
-npm run build
-```
-
 ---
 
 ## 🧠 Engineering Decisions
